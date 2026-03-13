@@ -1,0 +1,11 @@
+node_modules/
+dist/
+target/
+target-msvc/
+target-rustlld/
+target-rustlld-serial/
+.DS_Store
+Thumbs.db
+rustup-init.exe
+rustup-install.log
+tauri-dev.log

@@ -1,0 +1,1374 @@
+{
+  "syncTime": "2026-03-13 15:01",
+  "watchlistCount": 35,
+  "strongSignals": 13,
+  "avgChange": -2.2,
+  "mood": "mixed",
+  "stocks": [
+    {
+      "symbol": "600150",
+      "name": "中国船舶",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 35.18,
+      "changePct": -2.28,
+      "momentum": 36,
+      "volumeRatio": 0.86,
+      "note": "Watch whether the tape confirms the setup into the close.",
+      "thesis": "Track whether sector strength is broadening around this name.",
+      "sparkline": [
+        38.56,
+        38.76,
+        38.93,
+        37.32,
+        37.0,
+        36.56,
+        36.0,
+        35.18
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-2.28%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "36",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.86x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "000063",
+      "name": "中兴通讯",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 36.46,
+      "changePct": -1.78,
+      "momentum": 47,
+      "volumeRatio": 1.21,
+      "note": "Keep this on radar for a stronger volume expansion day.",
+      "thesis": "Use daily structure and turnover to judge conviction.",
+      "sparkline": [
+        36.97,
+        37.88,
+        37.4,
+        35.7,
+        36.87,
+        37.12,
+        37.12,
+        36.46
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-1.78%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "47",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.21x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "000636",
+      "name": "风华高科",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 21.7,
+      "changePct": -3.56,
+      "momentum": 29,
+      "volumeRatio": 0.77,
+      "note": "Trend structure is constructive, but confirmation still matters.",
+      "thesis": "Focus on whether the current swing can hold above recent support.",
+      "sparkline": [
+        23.9,
+        23.75,
+        23.75,
+        23.01,
+        23.89,
+        23.4,
+        22.5,
+        21.7
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-3.56%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "29",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.77x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "301120",
+      "name": "新特电气",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 25.24,
+      "changePct": -8.05,
+      "momentum": 13,
+      "volumeRatio": 0.99,
+      "note": "A clean follow-through day would improve confidence.",
+      "thesis": "Keep this in the pool for momentum confirmation rather than prediction.",
+      "sparkline": [
+        27.55,
+        26.7,
+        27.41,
+        29.8,
+        28.87,
+        27.5,
+        27.45,
+        25.24
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-8.05%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "13",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.99x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "600309",
+      "name": "万华化学",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 84.5,
+      "changePct": -2.42,
+      "momentum": 35,
+      "volumeRatio": 1.22,
+      "note": "Treat this as a tracking name until price and volume align.",
+      "thesis": "A stronger close and cleaner breadth would upgrade the setup.",
+      "sparkline": [
+        88.46,
+        89.2,
+        93.0,
+        89.96,
+        88.21,
+        89.45,
+        86.6,
+        84.5
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-2.42%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "35",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.22x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "600367",
+      "name": "红星发展",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 24.8,
+      "changePct": 5.04,
+      "momentum": 75,
+      "volumeRatio": 1.24,
+      "note": "Watch whether the tape confirms the setup into the close.",
+      "thesis": "Track whether sector strength is broadening around this name.",
+      "sparkline": [
+        24.99,
+        24.45,
+        23.82,
+        23.2,
+        22.34,
+        22.69,
+        23.61,
+        24.8
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+5.04%",
+          "level": "strong"
+        },
+        {
+          "label": "Momentum",
+          "value": "75",
+          "level": "strong"
+        },
+        {
+          "label": "Volume",
+          "value": "1.24x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "300191",
+      "name": "潜能恒信",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 44.22,
+      "changePct": -3.13,
+      "momentum": 37,
+      "volumeRatio": 1.23,
+      "note": "Keep this on radar for a stronger volume expansion day.",
+      "thesis": "Use daily structure and turnover to judge conviction.",
+      "sparkline": [
+        50.96,
+        46.8,
+        45.67,
+        49.23,
+        43.47,
+        45.45,
+        45.65,
+        44.22
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-3.13%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "37",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.23x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "002490",
+      "name": "山东墨龙",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 11.2,
+      "changePct": -4.44,
+      "momentum": 22,
+      "volumeRatio": 1.78,
+      "note": "Trend structure is constructive, but confirmation still matters.",
+      "thesis": "Focus on whether the current swing can hold above recent support.",
+      "sparkline": [
+        11.72,
+        12.7,
+        13.2,
+        13.24,
+        11.92,
+        12.01,
+        11.72,
+        11.2
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-4.44%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "22",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.78x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "300875",
+      "name": "捷强装备",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 46.12,
+      "changePct": 1.3,
+      "momentum": 39,
+      "volumeRatio": 1.05,
+      "note": "A clean follow-through day would improve confidence.",
+      "thesis": "Keep this in the pool for momentum confirmation rather than prediction.",
+      "sparkline": [
+        55.79,
+        53.74,
+        51.23,
+        48.64,
+        49.7,
+        46.73,
+        45.53,
+        46.12
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+1.30%",
+          "level": "watch"
+        },
+        {
+          "label": "Momentum",
+          "value": "39",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.05x",
+          "level": "watch"
+        }
+      ]
+    },
+    {
+      "symbol": "300139",
+      "name": "晓程科技",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 64.18,
+      "changePct": -5.74,
+      "momentum": 20,
+      "volumeRatio": 0.85,
+      "note": "Treat this as a tracking name until price and volume align.",
+      "thesis": "A stronger close and cleaner breadth would upgrade the setup.",
+      "sparkline": [
+        77.9,
+        74.0,
+        72.11,
+        74.0,
+        70.55,
+        69.31,
+        68.09,
+        64.18
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-5.74%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "20",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.85x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "000830",
+      "name": "鲁西化工",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 19.74,
+      "changePct": -1.99,
+      "momentum": 47,
+      "volumeRatio": 1.4,
+      "note": "Watch whether the tape confirms the setup into the close.",
+      "thesis": "Track whether sector strength is broadening around this name.",
+      "sparkline": [
+        18.81,
+        18.73,
+        20.21,
+        20.17,
+        18.92,
+        20.35,
+        20.14,
+        19.74
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-1.99%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "47",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.40x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "600409",
+      "name": "三友化工",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 8.67,
+      "changePct": -3.45,
+      "momentum": 47,
+      "volumeRatio": 1.13,
+      "note": "Keep this on radar for a stronger volume expansion day.",
+      "thesis": "Use daily structure and turnover to judge conviction.",
+      "sparkline": [
+        8.48,
+        8.38,
+        8.69,
+        8.42,
+        8.34,
+        9.17,
+        8.98,
+        8.67
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-3.45%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "47",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.13x",
+          "level": "watch"
+        }
+      ]
+    },
+    {
+      "symbol": "001337",
+      "name": "四川黄金",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 53.73,
+      "changePct": -3.8,
+      "momentum": 28,
+      "volumeRatio": 0.95,
+      "note": "Trend structure is constructive, but confirmation still matters.",
+      "thesis": "Focus on whether the current swing can hold above recent support.",
+      "sparkline": [
+        54.47,
+        54.74,
+        57.47,
+        61.4,
+        57.61,
+        55.41,
+        55.85,
+        53.73
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-3.80%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "28",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.95x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "600938",
+      "name": "中国海油",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 42.0,
+      "changePct": -2.33,
+      "momentum": 47,
+      "volumeRatio": 1.37,
+      "note": "A clean follow-through day would improve confidence.",
+      "thesis": "Keep this in the pool for momentum confirmation rather than prediction.",
+      "sparkline": [
+        42.85,
+        41.6,
+        40.49,
+        43.36,
+        40.98,
+        41.76,
+        43.0,
+        42.0
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-2.33%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "47",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.37x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "600026",
+      "name": "中远海能",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 22.11,
+      "changePct": -1.6,
+      "momentum": 40,
+      "volumeRatio": 1.16,
+      "note": "Treat this as a tracking name until price and volume align.",
+      "thesis": "A stronger close and cleaner breadth would upgrade the setup.",
+      "sparkline": [
+        23.79,
+        24.98,
+        25.24,
+        22.72,
+        23.26,
+        22.76,
+        22.47,
+        22.11
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-1.60%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "40",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.16x",
+          "level": "watch"
+        }
+      ]
+    },
+    {
+      "symbol": "300835",
+      "name": "龙磁科技",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 84.24,
+      "changePct": -4.13,
+      "momentum": 24,
+      "volumeRatio": 0.88,
+      "note": "Watch whether the tape confirms the setup into the close.",
+      "thesis": "Track whether sector strength is broadening around this name.",
+      "sparkline": [
+        87.63,
+        92.31,
+        90.0,
+        88.23,
+        96.4,
+        93.0,
+        87.87,
+        84.24
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-4.13%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "24",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.88x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "000070",
+      "name": "特发信息",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 17.09,
+      "changePct": -2.68,
+      "momentum": 47,
+      "volumeRatio": 0.95,
+      "note": "Keep this on radar for a stronger volume expansion day.",
+      "thesis": "Use daily structure and turnover to judge conviction.",
+      "sparkline": [
+        19.21,
+        17.51,
+        17.06,
+        16.47,
+        17.46,
+        17.47,
+        17.56,
+        17.09
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-2.68%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "47",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.95x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "601669",
+      "name": "中国电建",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 7.19,
+      "changePct": 9.94,
+      "momentum": 98,
+      "volumeRatio": 2.31,
+      "note": "Trend structure is constructive, but confirmation still matters.",
+      "thesis": "Focus on whether the current swing can hold above recent support.",
+      "sparkline": [
+        5.6,
+        5.75,
+        5.96,
+        5.92,
+        6.03,
+        6.38,
+        6.54,
+        7.19
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+9.94%",
+          "level": "strong"
+        },
+        {
+          "label": "Momentum",
+          "value": "98",
+          "level": "strong"
+        },
+        {
+          "label": "Volume",
+          "value": "2.31x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "002261",
+      "name": "拓维信息",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 36.9,
+      "changePct": -7.1,
+      "momentum": 14,
+      "volumeRatio": 1.85,
+      "note": "A clean follow-through day would improve confidence.",
+      "thesis": "Keep this in the pool for momentum confirmation rather than prediction.",
+      "sparkline": [
+        37.2,
+        35.5,
+        39.05,
+        42.96,
+        41.76,
+        41.08,
+        39.72,
+        36.9
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-7.10%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "14",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.85x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "600410",
+      "name": "华胜天成",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 28.59,
+      "changePct": -10.01,
+      "momentum": 18,
+      "volumeRatio": 1.13,
+      "note": "Treat this as a tracking name until price and volume align.",
+      "thesis": "A stronger close and cleaner breadth would upgrade the setup.",
+      "sparkline": [
+        29.06,
+        28.35,
+        29.73,
+        30.51,
+        31.83,
+        32.68,
+        31.77,
+        28.59
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-10.01%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "18",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.13x",
+          "level": "watch"
+        }
+      ]
+    },
+    {
+      "symbol": "000782",
+      "name": "恒申新材",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 5.97,
+      "changePct": -1.97,
+      "momentum": 40,
+      "volumeRatio": 0.7,
+      "note": "Watch whether the tape confirms the setup into the close.",
+      "thesis": "Track whether sector strength is broadening around this name.",
+      "sparkline": [
+        6.0,
+        6.16,
+        6.27,
+        6.16,
+        6.18,
+        6.18,
+        6.09,
+        5.97
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-1.97%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "40",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.70x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "002080",
+      "name": "中材科技",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 45.98,
+      "changePct": -0.07,
+      "momentum": 50,
+      "volumeRatio": 0.76,
+      "note": "Keep this on radar for a stronger volume expansion day.",
+      "thesis": "Use daily structure and turnover to judge conviction.",
+      "sparkline": [
+        46.65,
+        46.95,
+        44.99,
+        44.6,
+        46.71,
+        46.08,
+        46.01,
+        45.98
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-0.07%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "50",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.76x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "002432",
+      "name": "九安医疗",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 55.31,
+      "changePct": -6.06,
+      "momentum": 50,
+      "volumeRatio": 1.47,
+      "note": "Trend structure is constructive, but confirmation still matters.",
+      "thesis": "Focus on whether the current swing can hold above recent support.",
+      "sparkline": [
+        50.99,
+        50.27,
+        49.04,
+        50.31,
+        53.2,
+        58.52,
+        58.88,
+        55.31
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-6.06%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "50",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.47x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "600176",
+      "name": "中国巨石",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 26.1,
+      "changePct": -1.51,
+      "momentum": 45,
+      "volumeRatio": 0.62,
+      "note": "A clean follow-through day would improve confidence.",
+      "thesis": "Keep this in the pool for momentum confirmation rather than prediction.",
+      "sparkline": [
+        26.42,
+        27.39,
+        26.35,
+        26.0,
+        26.86,
+        26.5,
+        26.5,
+        26.1
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-1.51%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "45",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.62x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "000657",
+      "name": "中钨高新",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 56.07,
+      "changePct": -10.0,
+      "momentum": 8,
+      "volumeRatio": 0.91,
+      "note": "Treat this as a tracking name until price and volume align.",
+      "thesis": "A stronger close and cleaner breadth would upgrade the setup.",
+      "sparkline": [
+        66.48,
+        64.37,
+        65.66,
+        65.11,
+        66.46,
+        62.85,
+        62.3,
+        56.07
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-10.00%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "8",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.91x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "600352",
+      "name": "浙江龙盛",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 14.94,
+      "changePct": -3.05,
+      "momentum": 33,
+      "volumeRatio": 0.8,
+      "note": "Watch whether the tape confirms the setup into the close.",
+      "thesis": "Track whether sector strength is broadening around this name.",
+      "sparkline": [
+        16.16,
+        15.81,
+        15.84,
+        15.58,
+        15.65,
+        16.24,
+        15.41,
+        14.94
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-3.05%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "33",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.80x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "603650",
+      "name": "彤程新材",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 55.08,
+      "changePct": 0.55,
+      "momentum": 51,
+      "volumeRatio": 0.71,
+      "note": "Keep this on radar for a stronger volume expansion day.",
+      "thesis": "Use daily structure and turnover to judge conviction.",
+      "sparkline": [
+        56.24,
+        56.63,
+        56.22,
+        53.67,
+        55.54,
+        55.08,
+        54.78,
+        55.08
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+0.55%",
+          "level": "watch"
+        },
+        {
+          "label": "Momentum",
+          "value": "51",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.71x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "300189",
+      "name": "神农种业",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 8.26,
+      "changePct": 2.1,
+      "momentum": 49,
+      "volumeRatio": 0.94,
+      "note": "Trend structure is constructive, but confirmation still matters.",
+      "thesis": "Focus on whether the current swing can hold above recent support.",
+      "sparkline": [
+        9.34,
+        8.28,
+        8.66,
+        8.37,
+        8.27,
+        8.36,
+        8.09,
+        8.26
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+2.10%",
+          "level": "strong"
+        },
+        {
+          "label": "Momentum",
+          "value": "49",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.94x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "000949",
+      "name": "新乡化纤",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 7.51,
+      "changePct": 0.54,
+      "momentum": 54,
+      "volumeRatio": 1.5,
+      "note": "A clean follow-through day would improve confidence.",
+      "thesis": "Keep this in the pool for momentum confirmation rather than prediction.",
+      "sparkline": [
+        7.25,
+        7.11,
+        7.42,
+        6.9,
+        7.59,
+        7.69,
+        7.47,
+        7.51
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+0.54%",
+          "level": "watch"
+        },
+        {
+          "label": "Momentum",
+          "value": "54",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.50x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "002245",
+      "name": "蔚蓝锂芯",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 18.03,
+      "changePct": -0.61,
+      "momentum": 51,
+      "volumeRatio": 1.31,
+      "note": "Treat this as a tracking name until price and volume align.",
+      "thesis": "A stronger close and cleaner breadth would upgrade the setup.",
+      "sparkline": [
+        17.19,
+        17.96,
+        17.74,
+        17.37,
+        17.83,
+        18.38,
+        18.14,
+        18.03
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-0.61%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "51",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "1.31x",
+          "level": "strong"
+        }
+      ]
+    },
+    {
+      "symbol": "601615",
+      "name": "明阳智能",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 22.15,
+      "changePct": 0.54,
+      "momentum": 63,
+      "volumeRatio": 0.98,
+      "note": "Watch whether the tape confirms the setup into the close.",
+      "thesis": "Track whether sector strength is broadening around this name.",
+      "sparkline": [
+        19.78,
+        20.1,
+        20.23,
+        20.71,
+        21.2,
+        21.04,
+        22.03,
+        22.15
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+0.54%",
+          "level": "watch"
+        },
+        {
+          "label": "Momentum",
+          "value": "63",
+          "level": "watch"
+        },
+        {
+          "label": "Volume",
+          "value": "0.98x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "002172",
+      "name": "澳洋健康",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 4.27,
+      "changePct": 0.47,
+      "momentum": 44,
+      "volumeRatio": 0.84,
+      "note": "Keep this on radar for a stronger volume expansion day.",
+      "thesis": "Use daily structure and turnover to judge conviction.",
+      "sparkline": [
+        4.28,
+        4.34,
+        4.47,
+        4.37,
+        4.41,
+        4.34,
+        4.25,
+        4.27
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+0.47%",
+          "level": "watch"
+        },
+        {
+          "label": "Momentum",
+          "value": "44",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.84x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "300479",
+      "name": "神思电子",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 20.39,
+      "changePct": -2.39,
+      "momentum": 38,
+      "volumeRatio": 0.56,
+      "note": "Trend structure is constructive, but confirmation still matters.",
+      "thesis": "Focus on whether the current swing can hold above recent support.",
+      "sparkline": [
+        20.35,
+        20.62,
+        20.92,
+        21.16,
+        21.47,
+        21.18,
+        20.89,
+        20.39
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-2.39%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "38",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.56x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "300127",
+      "name": "银河磁体",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 33.16,
+      "changePct": -4.71,
+      "momentum": 30,
+      "volumeRatio": 0.66,
+      "note": "A clean follow-through day would improve confidence.",
+      "thesis": "Keep this in the pool for momentum confirmation rather than prediction.",
+      "sparkline": [
+        36.4,
+        36.15,
+        35.94,
+        35.19,
+        35.97,
+        35.04,
+        34.8,
+        33.16
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "-4.71%",
+          "level": "calm"
+        },
+        {
+          "label": "Momentum",
+          "value": "30",
+          "level": "calm"
+        },
+        {
+          "label": "Volume",
+          "value": "0.66x",
+          "level": "calm"
+        }
+      ]
+    },
+    {
+      "symbol": "002384",
+      "name": "东山精密",
+      "market": "CN",
+      "sector": "Watchlist",
+      "price": 110.93,
+      "changePct": 1.49,
+      "momentum": 67,
+      "volumeRatio": 1.16,
+      "note": "Treat this as a tracking name until price and volume align.",
+      "thesis": "A stronger close and cleaner breadth would upgrade the setup.",
+      "sparkline": [
+        95.0,
+        92.7,
+        95.45,
+        98.24,
+        108.06,
+        104.8,
+        109.3,
+        110.93
+      ],
+      "signals": [
+        {
+          "label": "Change",
+          "value": "+1.49%",
+          "level": "watch"
+        },
+        {
+          "label": "Momentum",
+          "value": "67",
+          "level": "watch"
+        },
+        {
+          "label": "Volume",
+          "value": "1.16x",
+          "level": "watch"
+        }
+      ]
+    }
+  ]
+}
