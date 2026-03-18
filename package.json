@@ -9,7 +9,8 @@
                     "preview":  "vite preview",
                     "tauri":  "tauri",
                     "tauri:check:rust":  "cmd /c scripts\\windows-tauri-env.cmd cargo check -j 1 --manifest-path src-tauri\\Cargo.toml",
-                    "tauri:build:rust":  "cmd /c scripts\\windows-tauri-env.cmd cargo build -j 1 --manifest-path src-tauri\\Cargo.toml"
+                    "tauri:build:rust":  "cmd /c scripts\\windows-tauri-env.cmd cargo build -j 1 --manifest-path src-tauri\\Cargo.toml",
+                    "build:exe":  "cmd /c scripts\\build-desktop-exe.cmd"
                 },
     "dependencies":  {
                          "@tauri-apps/api":  "^2.2.0",

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Stock Watch Desktop",
+  "productName": "股票自选跟踪台",
   "version": "0.1.0",
   "identifier": "com.stockwatch.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Stock Watch Desktop",
+        "title": "股票自选跟踪台",
         "width": 1440,
         "height": 920,
         "resizable": true

@@ -27,15 +27,35 @@ This project targets a desktop-first stock watchlist experience with:
 - Per-stock mini trend chart
 - Momentum / volume / note summary
 - Local mock data now, provider integration next
-- Watchlist codes stored in `watchlist_codes.txt`
+- Watchlist manually maintained in `src/data/watchlist.ts`
 
 ## AkShare Sync
 
-1. Maintain symbols in `watchlist_codes.txt`.
+1. Maintain the watchlist in `src/data/watchlist.ts` using `{ code, name }`.
 2. Run `python scripts/fetch_akshare_watchlist.py` for manual refresh, or use the desktop app refresh button.
 3. The script writes `src/data/akshare-snapshot.json`.
-4. Frontend prefers the AkShare snapshot and falls back to placeholder data if the snapshot is empty.
-5. Tauri exposes `get_dashboard_snapshot` and `refresh_akshare_snapshot` so the desktop shell can trigger Python directly.
+4. Run `python scripts/generate_watchlist_cycle_report.py` if you want to refresh the cycle report separately.
+5. Frontend prefers the AkShare snapshot and falls back to placeholder data if the snapshot is empty.
+6. Tauri exposes `get_dashboard_snapshot`, `get_cycle_report`, and `refresh_akshare_snapshot` so the desktop shell can trigger Python directly.
+
+## Watchlist Maintenance
+
+Edit `src/data/watchlist.ts` directly. Example:
+
+```ts
+{ code: "603739", name: "蔚蓝生物" }
+```
+
+- Add a stock: add one `{ code, name }` line
+- Remove a stock: delete one line
+- Rename for your own review workflow: edit `name`
+- `watchlist_codes.txt` is now only a compatibility fallback and does not need manual maintenance
+
+The same watchlist source also drives:
+
+- `src/data/akshare-snapshot.json`
+- `docs/cycles/watchlist-cycle-report.json`
+- the desktop app watchlist cards and cycle modal
 
 ## Suggested Next Steps
 

@@ -9,3 +9,7 @@ Thumbs.db
 rustup-init.exe
 rustup-install.log
 tauri-dev.log
+.cache/
+scripts/__pycache__/
+builds/
+*.bak

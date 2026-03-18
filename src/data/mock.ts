@@ -1,24 +1,309 @@
 import akshareSnapshot from "./akshare-snapshot.json";
+import { applyCycleAnalysis } from "./cycle";
 import { watchlistSeeds } from "./watchlist";
-import type { DashboardSnapshot, WatchStock } from "../types";
+import type {
+  AccountingBusinessInsight,
+  CompanyInsight,
+  AmplitudeDistributionProfile,
+  DashboardSnapshot,
+  IndicatorTone,
+  MacdIndicator,
+  NewsSensitivityInsight,
+  OfficialBusinessInsight,
+  PriceDistributionBand,
+  PriceDistributionProfile,
+  ResearchFocusInsight,
+  RsiIndicator,
+  ScoreFactor,
+  SelectionScore,
+  StockMetadata,
+  TechnicalIndicators,
+  WatchStock
+} from "../types";
 
 const notePool = [
-  "Watch whether the tape confirms the setup into the close.",
-  "Keep this on radar for a stronger volume expansion day.",
-  "Trend structure is constructive, but confirmation still matters.",
-  "A clean follow-through day would improve confidence.",
-  "Treat this as a tracking name until price and volume align."
+  "收盘前观察盘口是否确认当前形态。",
+  "继续跟踪，等待更强的放量日。",
+  "趋势结构尚可，但仍需进一步确认。",
+  "若出现干净的延续日，信号可信度会更高。",
+  "在价量重新共振前，先作为跟踪标的。"
 ];
 
 const thesisPool = [
-  "Track whether sector strength is broadening around this name.",
-  "Use daily structure and turnover to judge conviction.",
-  "Focus on whether the current swing can hold above recent support.",
-  "Keep this in the pool for momentum confirmation rather than prediction.",
-  "A stronger close and cleaner breadth would upgrade the setup."
+  "观察该股周边板块强度是否继续扩散。",
+  "结合日线结构与换手强度判断资金共识。",
+  "重点看当前波段能否站稳近期支撑。",
+  "保留在自选池中，等待动能确认，而不是提前预判。",
+  "若收盘更强、板块扩散更清晰，可上调关注级别。"
 ];
 
-const snapshot = akshareSnapshot as DashboardSnapshot;
+function normalizeStockMetadata(value: unknown): StockMetadata {
+  if (!value || typeof value !== "object") {
+    return {
+      officialWebsite: "",
+      websiteSource: ""
+    };
+  }
+
+  const candidate = value as Partial<StockMetadata>;
+  return {
+    officialWebsite: typeof candidate.officialWebsite === "string" ? candidate.officialWebsite : "",
+    websiteSource: typeof candidate.websiteSource === "string" ? candidate.websiteSource : ""
+  };
+}
+
+function createDefaultAccountingBusinessInsight(): AccountingBusinessInsight {
+  return {
+    reportDate: "",
+    classification: "",
+    summary: "暂无会计主营拆分数据",
+    segments: []
+  };
+}
+
+function createDefaultOfficialBusinessInsight(): OfficialBusinessInsight {
+  return {
+    companyName: "",
+    industry: "",
+    mainBusiness: "",
+    businessScope: "",
+    companyIntro: ""
+  };
+}
+
+function createDefaultNewsSensitivityInsight(): NewsSensitivityInsight {
+  return {
+    score: 0,
+    level: "低",
+    summary: "暂无新闻与政策敏感度样本",
+    matchedKeywords: [],
+    items: []
+  };
+}
+
+function createDefaultResearchFocusInsight(): ResearchFocusInsight {
+  return {
+    monthlyReportCount: 0,
+    summary: "暂无券商研报样本",
+    focusKeywords: [],
+    items: []
+  };
+}
+
+function createDefaultCompanyInsight(): CompanyInsight {
+  return {
+    updatedAt: "",
+    accountingBusiness: createDefaultAccountingBusinessInsight(),
+    officialBusiness: createDefaultOfficialBusinessInsight(),
+    newsSensitivity: createDefaultNewsSensitivityInsight(),
+    researchFocus: createDefaultResearchFocusInsight()
+  };
+}
+
+function createDefaultTechnicals(): TechnicalIndicators {
+  return {
+    macd: {
+      dif: 0,
+      dea: 0,
+      histogram: 0,
+      signalLabel: "无数据",
+      biasLabel: "等待样本",
+      tone: "neutral"
+    },
+    rsi14: {
+      period: 9,
+      value: 50,
+      signalLabel: "无数据",
+      biasLabel: "等待样本",
+      tone: "neutral"
+    }
+  };
+}
+
+function createDefaultSelectionScore(): SelectionScore {
+  return {
+    total: 0,
+    maxScore: 100,
+    grade: "D",
+    summary: "等待更多信号",
+    factors: []
+  };
+}
+
+function normalizeTone(value: unknown): IndicatorTone {
+  return value === "positive" || value === "negative" || value === "alert" ? value : "neutral";
+}
+
+function normalizeMacd(value: unknown): MacdIndicator {
+  if (!value || typeof value !== "object") {
+    return createDefaultTechnicals().macd;
+  }
+
+  const candidate = value as Partial<MacdIndicator>;
+  return {
+    dif: typeof candidate.dif === "number" ? candidate.dif : 0,
+    dea: typeof candidate.dea === "number" ? candidate.dea : 0,
+    histogram: typeof candidate.histogram === "number" ? candidate.histogram : 0,
+    signalLabel: typeof candidate.signalLabel === "string" ? candidate.signalLabel : "无数据",
+    biasLabel: typeof candidate.biasLabel === "string" ? candidate.biasLabel : "等待样本",
+    tone: normalizeTone(candidate.tone)
+  };
+}
+
+function normalizeRsi(value: unknown): RsiIndicator {
+  if (!value || typeof value !== "object") {
+    return createDefaultTechnicals().rsi14;
+  }
+
+  const candidate = value as Partial<RsiIndicator>;
+  return {
+    period: typeof candidate.period === "number" ? candidate.period : 9,
+    value: typeof candidate.value === "number" ? candidate.value : 50,
+    signalLabel: typeof candidate.signalLabel === "string" ? candidate.signalLabel : "无数据",
+    biasLabel: typeof candidate.biasLabel === "string" ? candidate.biasLabel : "等待样本",
+    tone: normalizeTone(candidate.tone)
+  };
+}
+
+function normalizeTechnicals(value: unknown): TechnicalIndicators {
+  if (!value || typeof value !== "object") {
+    return createDefaultTechnicals();
+  }
+
+  const candidate = value as Partial<TechnicalIndicators>;
+  return {
+    macd: normalizeMacd(candidate.macd),
+    rsi14: normalizeRsi(candidate.rsi14)
+  };
+}
+
+function normalizeScoreFactor(value: unknown): ScoreFactor {
+  if (!value || typeof value !== "object") {
+    return {
+      key: "unknown",
+      label: "未知",
+      score: 0,
+      maxScore: 0,
+      tone: "neutral",
+      summary: "无数据"
+    };
+  }
+
+  const candidate = value as Partial<ScoreFactor>;
+  return {
+    key: typeof candidate.key === "string" ? candidate.key : "unknown",
+    label: typeof candidate.label === "string" ? candidate.label : "未知",
+    score: typeof candidate.score === "number" ? candidate.score : 0,
+    maxScore: typeof candidate.maxScore === "number" ? candidate.maxScore : 0,
+    tone: normalizeTone(candidate.tone),
+    summary: typeof candidate.summary === "string" ? candidate.summary : "无数据"
+  };
+}
+
+function normalizeSelectionScore(value: unknown): SelectionScore {
+  if (!value || typeof value !== "object") {
+    return createDefaultSelectionScore();
+  }
+
+  const candidate = value as Partial<SelectionScore>;
+  return {
+    total: typeof candidate.total === "number" ? candidate.total : 0,
+    maxScore: typeof candidate.maxScore === "number" ? candidate.maxScore : 100,
+    grade: typeof candidate.grade === "string" ? candidate.grade : "D",
+    summary: typeof candidate.summary === "string" ? candidate.summary : "等待更多信号",
+    factors: Array.isArray(candidate.factors) ? candidate.factors.map(normalizeScoreFactor) : []
+  };
+}
+
+function normalizeCompanyInsight(value: unknown): CompanyInsight {
+  if (!value || typeof value !== "object") {
+    return createDefaultCompanyInsight();
+  }
+
+  const candidate = value as Partial<CompanyInsight>;
+  const accounting = candidate.accountingBusiness;
+  const official = candidate.officialBusiness;
+  const news = candidate.newsSensitivity;
+  const research = candidate.researchFocus;
+
+  return {
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+    accountingBusiness: {
+      reportDate: accounting && typeof accounting.reportDate === "string" ? accounting.reportDate : "",
+      classification: accounting && typeof accounting.classification === "string" ? accounting.classification : "",
+      summary: accounting && typeof accounting.summary === "string" ? accounting.summary : "暂无会计主营拆分数据",
+      segments: accounting && Array.isArray(accounting.segments)
+        ? accounting.segments.map((segment) => ({
+            name: typeof segment?.name === "string" ? segment.name : "",
+            revenueYi: typeof segment?.revenueYi === "number" ? segment.revenueYi : 0,
+            revenueRatio: typeof segment?.revenueRatio === "number" ? segment.revenueRatio : 0,
+            profitYi: typeof segment?.profitYi === "number" ? segment.profitYi : 0,
+            profitRatio: typeof segment?.profitRatio === "number" ? segment.profitRatio : 0,
+            grossMargin: typeof segment?.grossMargin === "number" ? segment.grossMargin : 0
+          }))
+        : []
+    },
+    officialBusiness: {
+      companyName: official && typeof official.companyName === "string" ? official.companyName : "",
+      industry: official && typeof official.industry === "string" ? official.industry : "",
+      mainBusiness: official && typeof official.mainBusiness === "string" ? official.mainBusiness : "",
+      businessScope: official && typeof official.businessScope === "string" ? official.businessScope : "",
+      companyIntro: official && typeof official.companyIntro === "string" ? official.companyIntro : ""
+    },
+    newsSensitivity: {
+      score: news && typeof news.score === "number" ? news.score : 0,
+      level: news && typeof news.level === "string" ? news.level : "低",
+      summary: news && typeof news.summary === "string" ? news.summary : "暂无新闻与政策敏感度样本",
+      matchedKeywords: news && Array.isArray(news.matchedKeywords)
+        ? news.matchedKeywords.filter((keyword): keyword is string => typeof keyword === "string")
+        : [],
+      items: news && Array.isArray(news.items)
+        ? news.items.map((item) => ({
+            title: typeof item?.title === "string" ? item.title : "",
+            publishTime: typeof item?.publishTime === "string" ? item.publishTime : "",
+            source: typeof item?.source === "string" ? item.source : "",
+            url: typeof item?.url === "string" ? item.url : "",
+            excerpt: typeof item?.excerpt === "string" ? item.excerpt : "",
+            matchedKeywords: Array.isArray(item?.matchedKeywords)
+              ? item.matchedKeywords.filter((keyword): keyword is string => typeof keyword === "string")
+              : []
+          }))
+        : []
+    },
+    researchFocus: {
+      monthlyReportCount: research && typeof research.monthlyReportCount === "number" ? research.monthlyReportCount : 0,
+      summary: research && typeof research.summary === "string" ? research.summary : "暂无券商研报样本",
+      focusKeywords: research && Array.isArray(research.focusKeywords)
+        ? research.focusKeywords.filter((keyword): keyword is string => typeof keyword === "string")
+        : [],
+      items: research && Array.isArray(research.items)
+        ? research.items.map((item) => ({
+            date: typeof item?.date === "string" ? item.date : "",
+            institution: typeof item?.institution === "string" ? item.institution : "",
+            rating: typeof item?.rating === "string" ? item.rating : "",
+            title: typeof item?.title === "string" ? item.title : "",
+            industry: typeof item?.industry === "string" ? item.industry : "",
+            reportUrl: typeof item?.reportUrl === "string" ? item.reportUrl : ""
+          }))
+        : []
+    }
+  };
+}
+
+function normalizeImportedStock(stock: WatchStock): WatchStock {
+  return {
+    ...stock,
+    metadata: normalizeStockMetadata((stock as WatchStock & { metadata?: unknown }).metadata),
+    companyInsight: normalizeCompanyInsight((stock as WatchStock & { companyInsight?: unknown }).companyInsight),
+    technicals: normalizeTechnicals((stock as WatchStock & { technicals?: unknown }).technicals),
+    selectionScore: normalizeSelectionScore((stock as WatchStock & { selectionScore?: unknown }).selectionScore)
+  };
+}
+
+const snapshot = applyCycleAnalysis({
+  ...(akshareSnapshot as DashboardSnapshot),
+  stocks: ((akshareSnapshot as DashboardSnapshot).stocks ?? []).map((stock) => normalizeImportedStock(stock as WatchStock))
+} as DashboardSnapshot);
 
 function createSparkline(seed: number) {
   return Array.from({ length: 8 }, (_, index) => {
@@ -29,6 +314,564 @@ function createSparkline(seed: number) {
   });
 }
 
+function createCloseSeries(seed: number, price: number) {
+  return Array.from({ length: 180 }, (_, index) => {
+    const wave = Math.sin((index + seed) / 11) * (0.7 + (seed % 6) * 0.08);
+    const drift = ((index / 180) * ((seed % 9) - 4)) / 3;
+    const wobble = (((seed + index * 7) % 13) - 6) * 0.05;
+    return Number((price + wave + drift + wobble).toFixed(2));
+  });
+}
+
+function createAmplitudeSeries(code: string, seed: number, price: number) {
+  const boardCap = codeLooksLikeGrowthBoard(code) ? 40 : 20;
+  return Array.from({ length: 180 }, (_, index) => {
+    const swing = ((((seed + index * 5) % 17) + 1) / 17) * (boardCap * 0.42);
+    const pulse = ((index + seed) % 9 === 0 ? boardCap * 0.12 : 0);
+    return Number(Math.min(boardCap * 0.95, swing + pulse).toFixed(2));
+  });
+}
+
+function createDefaultMacd(): MacdIndicator {
+  return createDefaultTechnicals().macd;
+}
+
+function createDefaultRsi(): RsiIndicator {
+  return createDefaultTechnicals().rsi14;
+}
+
+function clamp(value: number, low: number, high: number) {
+  return Math.max(low, Math.min(high, value));
+}
+
+function codeLooksLikeGrowthBoard(code: string) {
+  return code.startsWith("300") || code.startsWith("301") || code.startsWith("688");
+}
+
+function resolveAmplitudeTemplate(code: string, marketCapYi: number) {
+  const boardType = codeLooksLikeGrowthBoard(code) ? "创业成长板" : "沪深主板";
+
+  if (boardType === "创业成长板") {
+    if (marketCapYi >= 1000) {
+      return { boardType, marketCapBucket: "千亿以上", amplitudeCap: 40, edges: [0, 0.8, 1.5, 3, 5, 8, 40] };
+    }
+    if (marketCapYi >= 500) {
+      return { boardType, marketCapBucket: "500-1000亿", amplitudeCap: 40, edges: [0, 1, 2, 4, 6, 10, 40] };
+    }
+    if (marketCapYi >= 100) {
+      return { boardType, marketCapBucket: "100-500亿", amplitudeCap: 40, edges: [0, 1, 5, 10, 15, 25, 40] };
+    }
+    return { boardType, marketCapBucket: "100亿以下", amplitudeCap: 40, edges: [0, 2, 5, 10, 18, 28, 40] };
+  }
+
+  if (marketCapYi >= 1000) {
+    return { boardType, marketCapBucket: "千亿以上", amplitudeCap: 20, edges: [0, 0.5, 1, 2, 3, 5, 20] };
+  }
+  if (marketCapYi >= 500) {
+    return { boardType, marketCapBucket: "500-1000亿", amplitudeCap: 20, edges: [0, 0.8, 1.5, 3, 5, 8, 20] };
+  }
+  if (marketCapYi >= 100) {
+    return { boardType, marketCapBucket: "100-500亿", amplitudeCap: 20, edges: [0, 1, 3, 5, 10, 15, 20] };
+  }
+  return { boardType, marketCapBucket: "100亿以下", amplitudeCap: 20, edges: [0, 1.5, 3, 5, 8, 12, 20] };
+}
+
+function buildPriceDistribution(closeSeries: number[], currentPrice: number): PriceDistributionProfile {
+  const source = closeSeries.length > 0 ? closeSeries : [currentPrice || 0];
+  const yearLow = Number(Math.min(...source).toFixed(2));
+  const yearHigh = Number(Math.max(...source).toFixed(2));
+  const sampleSize = source.length;
+
+  if (yearHigh <= yearLow) {
+    const stableBand = 2;
+    const bands: PriceDistributionBand[] = Array.from({ length: 6 }, (_, index) => ({
+      index,
+      lower: yearLow,
+      upper: yearHigh,
+      closeCount: index === stableBand ? sampleSize : 0,
+      ratio: Number((index === stableBand ? 1 : 0).toFixed(4)),
+      rangeLabel: `${yearLow.toFixed(2)}-${yearHigh.toFixed(2)}`
+    }));
+
+    return {
+      yearHigh,
+      yearLow,
+      sampleSize,
+      currentBand: stableBand,
+      dominantBand: stableBand,
+      currentPositionPct: 0.5,
+      bands
+    };
+  }
+
+  const bandWidth = (yearHigh - yearLow) / 6;
+  const counts = Array.from({ length: 6 }, () => 0);
+  const resolveBand = (price: number) => Math.max(0, Math.min(5, Math.floor((price - yearLow) / bandWidth)));
+
+  source.forEach((closePrice) => {
+    counts[resolveBand(closePrice)] += 1;
+  });
+
+  const boundedPrice = clamp(currentPrice, yearLow, yearHigh);
+  const currentBand = resolveBand(boundedPrice);
+  const dominantBand = counts.reduce((bestIndex, count, index) => (
+    count > counts[bestIndex] ? index : bestIndex
+  ), 0);
+
+  const bands: PriceDistributionBand[] = Array.from({ length: 6 }, (_, index) => {
+    const lower = yearLow + index * bandWidth;
+    const upper = index === 5 ? yearHigh : yearLow + (index + 1) * bandWidth;
+    return {
+      index,
+      lower: Number(lower.toFixed(2)),
+      upper: Number(upper.toFixed(2)),
+      closeCount: counts[index],
+      ratio: Number((counts[index] / sampleSize).toFixed(4)),
+      rangeLabel: `${lower.toFixed(2)}-${upper.toFixed(2)}`
+    };
+  });
+
+  return {
+    yearHigh,
+    yearLow,
+    sampleSize,
+    currentBand,
+    dominantBand,
+    currentPositionPct: Number((((boundedPrice - yearLow) / (yearHigh - yearLow)) || 0).toFixed(4)),
+    bands
+  };
+}
+
+function buildAmplitudeDistribution(
+  code: string,
+  amplitudeSeries: number[],
+  currentAmplitude: number,
+  marketCapYi: number
+): AmplitudeDistributionProfile {
+  const template = resolveAmplitudeTemplate(code, marketCapYi);
+  const source = amplitudeSeries.length > 0 ? amplitudeSeries : [currentAmplitude || 0];
+  const counts = Array.from({ length: template.edges.length - 1 }, () => 0);
+  const sampleSize = source.length;
+
+  const resolveBand = (value: number) => {
+    const boundedValue = clamp(value, 0, template.amplitudeCap);
+    for (let index = 0; index < template.edges.length - 1; index += 1) {
+      const lower = template.edges[index];
+      const upper = template.edges[index + 1];
+      if (index === template.edges.length - 2) {
+        if (boundedValue >= lower && boundedValue <= upper) {
+          return index;
+        }
+      } else if (boundedValue >= lower && boundedValue < upper) {
+        return index;
+      }
+    }
+    return template.edges.length - 2;
+  };
+
+  source.forEach((value) => {
+    counts[resolveBand(value)] += 1;
+  });
+
+  const currentBand = resolveBand(currentAmplitude);
+  const dominantBand = counts.reduce((bestIndex, count, index) => (
+    count > counts[bestIndex] ? index : bestIndex
+  ), 0);
+
+  const bands: PriceDistributionBand[] = counts.map((count, index) => ({
+    index,
+    lower: template.edges[index],
+    upper: template.edges[index + 1],
+    closeCount: count,
+    ratio: Number((count / sampleSize).toFixed(4)),
+    rangeLabel: `${template.edges[index].toFixed(1)}%-${template.edges[index + 1].toFixed(1)}%`
+  }));
+
+  return {
+    boardType: template.boardType,
+    marketCapYi: Number(marketCapYi.toFixed(2)),
+    marketCapBucket: template.marketCapBucket,
+    amplitudeCap: template.amplitudeCap,
+    currentAmplitude: Number(currentAmplitude.toFixed(2)),
+    sampleSize,
+    currentBand,
+    dominantBand,
+    bands
+  };
+}
+
+function buildMacdIndicator(closeSeries: number[]): MacdIndicator {
+  if (closeSeries.length < 2) {
+    return createDefaultMacd();
+  }
+
+  const smoothing = (period: number) => 2 / (period + 1);
+  let ema10 = closeSeries[0];
+  let ema200 = closeSeries[0];
+  let dea = 0;
+  let prevDif = 0;
+  let prevDea = 0;
+
+  closeSeries.forEach((price, index) => {
+    if (index === 0) {
+      return;
+    }
+
+    prevDif = ema10 - ema200;
+    prevDea = dea;
+    ema10 = price * smoothing(10) + ema10 * (1 - smoothing(10));
+    ema200 = price * smoothing(200) + ema200 * (1 - smoothing(200));
+    const dif = ema10 - ema200;
+    dea = dif * smoothing(7) + dea * (1 - smoothing(7));
+  });
+
+  const dif = ema10 - ema200;
+  const histogram = (dif - dea) * 2;
+
+  if (prevDif < prevDea && dif >= dea) {
+    return {
+      dif: Number(dif.toFixed(3)),
+      dea: Number(dea.toFixed(3)),
+      histogram: Number(histogram.toFixed(3)),
+      signalLabel: "MACD 金叉",
+      biasLabel: "短中期转强，关注跟随",
+      tone: "positive"
+    };
+  }
+
+  if (prevDif > prevDea && dif <= dea) {
+    return {
+      dif: Number(dif.toFixed(3)),
+      dea: Number(dea.toFixed(3)),
+      histogram: Number(histogram.toFixed(3)),
+      signalLabel: "MACD 死叉",
+      biasLabel: "趋势转弱，谨慎追高",
+      tone: "negative"
+    };
+  }
+
+  if (dif >= dea && dif >= 0) {
+    return {
+      dif: Number(dif.toFixed(3)),
+      dea: Number(dea.toFixed(3)),
+      histogram: Number(histogram.toFixed(3)),
+      signalLabel: "长周期多头",
+      biasLabel: "站上长周期均线",
+      tone: "positive"
+    };
+  }
+
+  if (dif >= dea) {
+    return {
+      dif: Number(dif.toFixed(3)),
+      dea: Number(dea.toFixed(3)),
+      histogram: Number(histogram.toFixed(3)),
+      signalLabel: "长周期修复",
+      biasLabel: "空头背景下修复观察",
+      tone: "neutral"
+    };
+  }
+
+  if (dif <= 0) {
+    return {
+      dif: Number(dif.toFixed(3)),
+      dea: Number(dea.toFixed(3)),
+      histogram: Number(histogram.toFixed(3)),
+      signalLabel: "长周期空头",
+      biasLabel: "远离 200 日均线",
+      tone: "negative"
+    };
+  }
+
+  return {
+    dif: Number(dif.toFixed(3)),
+    dea: Number(dea.toFixed(3)),
+    histogram: Number(histogram.toFixed(3)),
+    signalLabel: "长周期回落",
+    biasLabel: "多头回踩，防止走弱",
+    tone: "alert"
+  };
+}
+
+function buildRsiIndicator(closeSeries: number[], period = 9): RsiIndicator {
+  if (closeSeries.length <= period) {
+    return createDefaultRsi();
+  }
+
+  const deltas = closeSeries.slice(1).map((price, index) => price - closeSeries[index]);
+  let averageGain = 0;
+  let averageLoss = 0;
+
+  deltas.slice(0, period).forEach((delta) => {
+    averageGain += delta > 0 ? delta : 0;
+    averageLoss += delta < 0 ? Math.abs(delta) : 0;
+  });
+
+  averageGain /= period;
+  averageLoss /= period;
+
+  deltas.slice(period).forEach((delta) => {
+    const gain = delta > 0 ? delta : 0;
+    const loss = delta < 0 ? Math.abs(delta) : 0;
+    averageGain = ((averageGain * (period - 1)) + gain) / period;
+    averageLoss = ((averageLoss * (period - 1)) + loss) / period;
+  });
+
+  const rs = averageLoss === 0 ? 100 : averageGain / averageLoss;
+  const value = 100 - (100 / (1 + rs));
+  const previousDeltas = deltas.slice(0, -1);
+  let prevAverageGain = 0;
+  let prevAverageLoss = 0;
+
+  if (previousDeltas.length >= period) {
+    previousDeltas.slice(0, period).forEach((delta) => {
+      prevAverageGain += delta > 0 ? delta : 0;
+      prevAverageLoss += delta < 0 ? Math.abs(delta) : 0;
+    });
+
+    prevAverageGain /= period;
+    prevAverageLoss /= period;
+
+    previousDeltas.slice(period).forEach((delta) => {
+      const gain = delta > 0 ? delta : 0;
+      const loss = delta < 0 ? Math.abs(delta) : 0;
+      prevAverageGain = ((prevAverageGain * (period - 1)) + gain) / period;
+      prevAverageLoss = ((prevAverageLoss * (period - 1)) + loss) / period;
+    });
+  }
+
+  const prevRs = prevAverageLoss === 0 ? 100 : prevAverageGain / prevAverageLoss;
+  const prevValue = previousDeltas.length >= period ? 100 - (100 / (1 + prevRs)) : value;
+
+  if (value >= 80) {
+    return { period, value: Number(value.toFixed(2)), signalLabel: "RSI 高风险", biasLabel: "建议卖出或减仓", tone: "alert" };
+  }
+  if (prevValue < 50 && value >= 50) {
+    return { period, value: Number(value.toFixed(2)), signalLabel: "RSI 上穿50", biasLabel: "重点关注买入", tone: "positive" };
+  }
+  if (value >= 50) {
+    return { period, value: Number(value.toFixed(2)), signalLabel: "RSI 强势区", biasLabel: "多头主导，持有观察", tone: "positive" };
+  }
+  if (prevValue >= 50 && value < 50) {
+    return { period, value: Number(value.toFixed(2)), signalLabel: "RSI 跌破50", biasLabel: "强势失守，转弱观察", tone: "negative" };
+  }
+  if (value >= 30) {
+    return { period, value: Number(value.toFixed(2)), signalLabel: "RSI 观察区", biasLabel: "等待重新站上50", tone: "neutral" };
+  }
+
+  return { period, value: Number(value.toFixed(2)), signalLabel: "RSI 弱势区", biasLabel: "低于30，先等修复", tone: "negative" };
+}
+
+function buildTechnicalIndicators(closeSeries: number[]): TechnicalIndicators {
+  if (closeSeries.length === 0) {
+    return createDefaultTechnicals();
+  }
+
+  return {
+    macd: buildMacdIndicator(closeSeries),
+    rsi14: buildRsiIndicator(closeSeries)
+  };
+}
+
+function gradeFromTotalScore(totalScore: number) {
+  if (totalScore >= 85) {
+    return "A";
+  }
+  if (totalScore >= 75) {
+    return "B+";
+  }
+  if (totalScore >= 65) {
+    return "B";
+  }
+  if (totalScore >= 55) {
+    return "C";
+  }
+  return "D";
+}
+
+function buildSelectionScore(
+  priceDistribution: PriceDistributionProfile,
+  amplitudeDistribution: AmplitudeDistributionProfile,
+  volumeRatio: number,
+  technicals: TechnicalIndicators
+): SelectionScore {
+  const factors: ScoreFactor[] = [];
+
+  let positionScore = 2;
+  let positionSummary = "年内高位，价格优势有限";
+  let positionTone: IndicatorTone = "negative";
+  if (priceDistribution.currentPositionPct <= 0.2) {
+    positionScore = 20;
+    positionSummary = "年内低位，价格周期占优";
+    positionTone = "positive";
+  } else if (priceDistribution.currentPositionPct <= 0.4) {
+    positionScore = 17;
+    positionSummary = "年内中低位，具备位置优势";
+    positionTone = "positive";
+  } else if (priceDistribution.currentPositionPct <= 0.6) {
+    positionScore = 12;
+    positionSummary = "年内中位，性价比中性";
+    positionTone = "neutral";
+  } else if (priceDistribution.currentPositionPct <= 0.8) {
+    positionScore = 7;
+    positionSummary = "年内偏高位，注意追涨风险";
+    positionTone = "alert";
+  }
+  factors.push({
+    key: "price_cycle",
+    label: "价格周期",
+    score: positionScore,
+    maxScore: 20,
+    tone: positionTone,
+    summary: positionSummary
+  });
+
+  const bandGap = amplitudeDistribution.currentBand - amplitudeDistribution.dominantBand;
+  let amplitudeScore = 6;
+  let amplitudeSummary = "振幅过热，警惕波动放大";
+  let amplitudeTone: IndicatorTone = "alert";
+  if (bandGap === 1) {
+    amplitudeScore = 18;
+    amplitudeSummary = "振幅略强于常态，活跃度理想";
+    amplitudeTone = "positive";
+  } else if (bandGap === 0) {
+    amplitudeScore = 16;
+    amplitudeSummary = "振幅处于常态活跃区";
+    amplitudeTone = "positive";
+  } else if (bandGap < 0) {
+    amplitudeScore = 10;
+    amplitudeSummary = "振幅偏弱，等待波动放大";
+    amplitudeTone = "neutral";
+  } else if (bandGap >= 2) {
+    amplitudeScore = 4;
+    amplitudeSummary = "振幅明显过热，先控风险";
+    amplitudeTone = "negative";
+  }
+  factors.push({
+    key: "amplitude_strength",
+    label: "振幅强度",
+    score: amplitudeScore,
+    maxScore: 20,
+    tone: amplitudeTone,
+    summary: amplitudeSummary
+  });
+
+  let volumeScore = 2;
+  let volumeSummary = "量能不足，资金关注度弱";
+  let volumeTone: IndicatorTone = "negative";
+  if (volumeRatio >= 2.0) {
+    volumeScore = 20;
+    volumeSummary = "量能显著放大，资金参与强";
+    volumeTone = "positive";
+  } else if (volumeRatio >= 1.5) {
+    volumeScore = 17;
+    volumeSummary = "量能活跃，具备跟随价值";
+    volumeTone = "positive";
+  } else if (volumeRatio >= 1.2) {
+    volumeScore = 14;
+    volumeSummary = "量能温和放大，关注延续";
+    volumeTone = "positive";
+  } else if (volumeRatio >= 1.0) {
+    volumeScore = 10;
+    volumeSummary = "量能中性，等待放量确认";
+    volumeTone = "neutral";
+  } else if (volumeRatio >= 0.8) {
+    volumeScore = 6;
+    volumeSummary = "量能偏淡，尚未形成共振";
+    volumeTone = "neutral";
+  }
+  factors.push({
+    key: "volume_strength",
+    label: "量能",
+    score: volumeScore,
+    maxScore: 20,
+    tone: volumeTone,
+    summary: volumeSummary
+  });
+
+  const rsi = technicals.rsi14;
+  let rsiScore = 3;
+  let rsiSummary = "RSI 弱势区，先等修复";
+  let rsiTone: IndicatorTone = "negative";
+  if (rsi.signalLabel === "RSI 上穿50") {
+    rsiScore = 20;
+    rsiSummary = "RSI 从30-50上穿50，重点关注买入";
+    rsiTone = "positive";
+  } else if (rsi.signalLabel === "RSI 强势区") {
+    rsiScore = 17;
+    rsiSummary = "RSI 位于50-80强势区";
+    rsiTone = "positive";
+  } else if (rsi.signalLabel === "RSI 观察区") {
+    rsiScore = 10;
+    rsiSummary = "RSI 位于30-50观察区";
+    rsiTone = "neutral";
+  } else if (rsi.signalLabel === "RSI 跌破50") {
+    rsiScore = 5;
+    rsiSummary = "RSI 跌破50，强势失守";
+    rsiTone = "negative";
+  } else if (rsi.signalLabel === "RSI 高风险") {
+    rsiScore = 1;
+    rsiSummary = "RSI 超过80，高风险区";
+    rsiTone = "alert";
+  }
+  factors.push({
+    key: "rsi_signal",
+    label: "RSI",
+    score: rsiScore,
+    maxScore: 20,
+    tone: rsiTone,
+    summary: rsiSummary
+  });
+
+  const macd = technicals.macd;
+  let macdScore = 4;
+  let macdSummary = "长周期空头，趋势拖累";
+  let macdTone: IndicatorTone = "negative";
+  if (macd.signalLabel === "MACD 金叉") {
+    macdScore = 20;
+    macdSummary = "MACD 金叉，趋势扭转信号强";
+    macdTone = "positive";
+  } else if (macd.signalLabel === "长周期多头") {
+    macdScore = 17;
+    macdSummary = "长周期多头，趋势保持完整";
+    macdTone = "positive";
+  } else if (macd.signalLabel === "长周期修复") {
+    macdScore = 12;
+    macdSummary = "长周期修复，等待进一步确认";
+    macdTone = "neutral";
+  } else if (macd.signalLabel === "长周期回落") {
+    macdScore = 8;
+    macdSummary = "长周期回落，关注是否再度走弱";
+    macdTone = "alert";
+  } else if (macd.signalLabel === "MACD 死叉") {
+    macdScore = 3;
+    macdSummary = "MACD 死叉，短中期偏弱";
+    macdTone = "negative";
+  }
+  factors.push({
+    key: "macd_trend",
+    label: "MACD趋势",
+    score: macdScore,
+    maxScore: 20,
+    tone: macdTone,
+    summary: macdSummary
+  });
+
+  const total = factors.reduce((sum, factor) => sum + factor.score, 0);
+  const leading = [...factors]
+    .sort((a, b) => b.score - a.score)
+    .filter((factor, index) => index < 2)
+    .map((factor) => factor.summary);
+
+  return {
+    total,
+    maxScore: 100,
+    grade: gradeFromTotalScore(total),
+    summary: leading.join("；"),
+    factors
+  };
+}
+
 function buildFallbackStock(code: string, index: number): WatchStock {
   const numericSeed = Number(code.slice(-3)) || index * 17 + 11;
   const changePct = Number((((numericSeed % 17) - 6) * 0.43).toFixed(2));
@@ -36,12 +879,20 @@ function buildFallbackStock(code: string, index: number): WatchStock {
   const momentum = 48 + (numericSeed % 44);
   const volumeRatio = Number((0.78 + (numericSeed % 9) * 0.11).toFixed(2));
   const signalLevel = changePct >= 2 ? "strong" : changePct >= 0 ? "watch" : "calm";
+  const closeSeries = createCloseSeries(numericSeed, price);
+  const amplitudeSeries = createAmplitudeSeries(code, numericSeed, price);
+  const marketCapYi = Number((80 + (numericSeed % 1500)).toFixed(2));
+  const currentAmplitude = amplitudeSeries[amplitudeSeries.length - 1] ?? 0;
+  const technicals = buildTechnicalIndicators(closeSeries);
+  const priceDistribution = buildPriceDistribution(closeSeries, price);
+  const amplitudeDistribution = buildAmplitudeDistribution(code, amplitudeSeries, currentAmplitude, marketCapYi);
+  const selectionScore = buildSelectionScore(priceDistribution, amplitudeDistribution, volumeRatio, technicals);
 
   return {
     symbol: code,
     name: code,
-    market: "CN",
-    sector: "Watchlist",
+    market: "A股",
+    sector: "自选池",
     price,
     changePct,
     momentum,
@@ -50,10 +901,19 @@ function buildFallbackStock(code: string, index: number): WatchStock {
     thesis: thesisPool[index % thesisPool.length],
     sparkline: createSparkline(numericSeed),
     signals: [
-      { label: "Change", value: `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`, level: signalLevel },
-      { label: "Momentum", value: String(momentum), level: momentum >= 75 ? "strong" : "watch" },
-      { label: "Volume", value: `${volumeRatio.toFixed(2)}x`, level: volumeRatio >= 1.2 ? "strong" : "calm" }
-    ]
+      { label: "涨跌", value: `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`, level: signalLevel },
+      { label: "动能", value: String(momentum), level: momentum >= 75 ? "strong" : "watch" },
+      { label: "量比", value: `${volumeRatio.toFixed(2)}倍`, level: volumeRatio >= 1.2 ? "strong" : "calm" }
+    ],
+    metadata: {
+      officialWebsite: "",
+      websiteSource: ""
+    },
+    companyInsight: createDefaultCompanyInsight(),
+    technicals,
+    selectionScore,
+    priceDistribution,
+    amplitudeDistribution
   };
 }
 
@@ -61,14 +921,14 @@ export function getFallbackSnapshot(): DashboardSnapshot {
   const stocks = watchlistSeeds.map((item, index) => buildFallbackStock(item.code, index));
   const averageChange = stocks.reduce((sum, stock) => sum + stock.changePct, 0) / stocks.length;
 
-  return {
+  return applyCycleAnalysis({
     syncTime: "2026-03-12 16:30",
     watchlistCount: stocks.length,
     strongSignals: stocks.filter((stock) => stock.signals.some((signal) => signal.level === "strong")).length,
     avgChange: Number(averageChange.toFixed(2)),
-    mood: averageChange >= 0 ? "risk-on" : "mixed",
+    mood: averageChange >= 0 ? "偏强" : "分化",
     stocks
-  };
+  });
 }
 
 export function getInitialSnapshot(): DashboardSnapshot {
