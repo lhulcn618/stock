@@ -18,7 +18,7 @@ This project targets a desktop-first stock watchlist experience with:
 - Frontend: React + TypeScript + Vite
 - Local storage: SQLite
 - Charts: lightweight SVG components first, then ECharts or Lightweight Charts
-- Market data bridge: Python + AkShare
+- Market data bridge: Python + Baostock / AkShare
 
 ## MVP Scope
 
@@ -29,14 +29,15 @@ This project targets a desktop-first stock watchlist experience with:
 - Local mock data now, provider integration next
 - Watchlist manually maintained in `src/data/watchlist.ts`
 
-## AkShare Sync
+## Market Sync
 
 1. Maintain the watchlist in `src/data/watchlist.ts` using `{ code, name }`.
 2. Run `python scripts/fetch_akshare_watchlist.py` for manual refresh, or use the desktop app refresh button.
 3. The script writes `src/data/akshare-snapshot.json`.
 4. Run `python scripts/generate_watchlist_cycle_report.py` if you want to refresh the cycle report separately.
-5. Frontend prefers the AkShare snapshot and falls back to placeholder data if the snapshot is empty.
-6. Tauri exposes `get_dashboard_snapshot`, `get_cycle_report`, and `refresh_akshare_snapshot` so the desktop shell can trigger Python directly.
+5. A-share daily price/history uses `Baostock` first; metadata, boards, ETF, US market, news, and research still use `AkShare`.
+6. Frontend prefers the market snapshot and falls back to placeholder data if the snapshot is empty.
+7. Tauri exposes `get_dashboard_snapshot`, `get_cycle_report`, and `refresh_akshare_snapshot` so the desktop shell can trigger Python directly.
 
 ## Watchlist Maintenance
 
@@ -72,7 +73,7 @@ The workspace currently contains:
 - architecture and ADR docs
 - a React dashboard scaffold
 - a Tauri 2 Rust shell scaffold
-- an AkShare watchlist fetch script
+- a Baostock-first watchlist fetch script with AkShare metadata fallbacks
 - a Tauri command bridge for one-click desktop refresh
 
 Rust is not installed in this environment yet, so the app has not been compiled here.
