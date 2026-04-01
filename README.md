@@ -2,6 +2,8 @@
 
 A cross-platform stock watchlist desktop app scaffold built for `Tauri 2 + Rust + React`.
 
+一个大A股票价格跟踪神器
+
 ## Product Goal
 
 This project targets a desktop-first stock watchlist experience with:
