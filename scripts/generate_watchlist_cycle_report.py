@@ -43,6 +43,17 @@ class SwingSegment:
 
 
 @dataclass
+class CycleWindow:
+    label: str
+    direction: str
+    start_date: str
+    end_date: str
+    trading_days: int
+    return_pct: float
+    status: str
+
+
+@dataclass
 class CycleOpportunity:
     current_price: float
     current_date: str
@@ -58,6 +69,22 @@ class CycleOpportunity:
     distance_to_resistance_pct: float
     rebound_from_support_pct: float
     drawdown_from_resistance_pct: float
+
+
+@dataclass
+class CycleRegime:
+    label: str
+    action_label: str
+    tone: str
+    since_date: str
+    range_low: float
+    range_high: float
+    current_position_pct: float
+    amplitude_ratio: float
+    liquidity_ratio: float
+    path_efficiency: float
+    recent_swing_count: int
+    summary: str
 
 
 @dataclass
@@ -78,7 +105,10 @@ class CycleSummary:
     latest_state: str
     chart_path: str
     grid_path: str
+    regime: CycleRegime
     opportunity: CycleOpportunity
+    recent_cycles: list[CycleWindow]
+    current_cycle: CycleWindow
     pivots: list[PivotPoint]
     swings: list[SwingSegment]
 
@@ -220,6 +250,280 @@ def build_swings(pivots: list[PivotPoint]) -> list[SwingSegment]:
         )
 
     return swings
+
+
+def build_cycle_windows(frame: pd.DataFrame, pivots: list[PivotPoint], swings: list[SwingSegment]) -> tuple[list[CycleWindow], CycleWindow]:
+    recent_swings = swings[-2:]
+    recent_cycles = [
+        CycleWindow(
+            label=f"完整周期 {index + 1}",
+            direction=item.direction,
+            start_date=item.start_date,
+            end_date=item.end_date,
+            trading_days=item.trading_days,
+            return_pct=item.return_pct,
+            status="completed",
+        )
+        for index, item in enumerate(recent_swings)
+    ]
+
+    if frame.empty:
+        return recent_cycles, CycleWindow("当前周期", "up", "", "", 0, 0.0, "ongoing")
+
+    current_date = frame["date"].iloc[-1].strftime("%Y-%m-%d")
+    current_price = float(frame["close"].iloc[-1])
+    if not pivots:
+        base_price = float(frame["close"].iloc[0])
+        trading_days = max(1, len(frame) - 1)
+        return_pct = sanitize_float(((current_price / base_price) - 1) * 100, 2) if base_price else 0.0
+        return recent_cycles, CycleWindow(
+            label="当前周期",
+            direction="up" if return_pct >= 0 else "down",
+            start_date=frame["date"].iloc[0].strftime("%Y-%m-%d"),
+            end_date=current_date,
+            trading_days=trading_days,
+            return_pct=return_pct,
+            status="ongoing",
+        )
+
+    last_pivot = pivots[-1]
+    start_index = max(0, min(last_pivot.index, len(frame) - 1))
+    trading_days = max(1, len(frame) - 1 - start_index)
+    if last_pivot.price:
+        current_return_pct = sanitize_float(((current_price / last_pivot.price) - 1) * 100, 2)
+    else:
+        current_return_pct = 0.0
+    current_direction = "up" if current_return_pct >= 0 else "down"
+
+    return recent_cycles, CycleWindow(
+        label="当前周期",
+        direction=current_direction,
+        start_date=last_pivot.date,
+        end_date=current_date,
+        trading_days=trading_days,
+        return_pct=current_return_pct,
+        status="ongoing",
+    )
+
+
+def build_recent_regime_metrics(frame: pd.DataFrame, pivots: list[PivotPoint]) -> dict[str, float | int | str | list[PivotPoint] | list[SwingSegment]]:
+    if frame.empty:
+        return {
+            "recent_start_date": "",
+            "recent_end_date": "",
+            "range_low": 0.0,
+            "range_high": 0.0,
+            "current_position_pct": 0.0,
+            "amplitude_ratio": 0.0,
+            "liquidity_ratio": 0.0,
+            "net_return_pct": 0.0,
+            "path_efficiency": 0.0,
+            "recent_pivots": [],
+            "recent_swings": [],
+            "recent_up_swings": 0,
+            "recent_down_swings": 0,
+            "breakout_up": False,
+            "breakout_down": False,
+        }
+
+    lookback = 80
+    recent = frame.tail(lookback).copy()
+    prior = frame.iloc[-lookback * 2:-lookback].copy() if len(frame) >= lookback * 2 else frame.head(max(len(frame) - lookback, 1)).copy()
+
+    recent["amp"] = (recent["high"] - recent["low"]) / recent["close"].shift(1) * 100
+    prior["amp"] = (prior["high"] - prior["low"]) / prior["close"].shift(1) * 100
+
+    recent_amp = float(recent["amp"].dropna().mean()) if recent["amp"].notna().any() else 0.0
+    prior_amp = float(prior["amp"].dropna().mean()) if prior["amp"].notna().any() else 0.0
+    amplitude_ratio = recent_amp / max(prior_amp, 0.01)
+
+    recent_volume = float(recent[fw.C_VOLUME].mean()) if fw.C_VOLUME in recent.columns else 0.0
+    prior_volume = float(prior[fw.C_VOLUME].mean()) if fw.C_VOLUME in prior.columns else 0.0
+    liquidity_ratio = recent_volume / max(prior_volume, 1.0)
+
+    range_low = float(recent["close"].min()) if not recent.empty else 0.0
+    range_high = float(recent["close"].max()) if not recent.empty else 0.0
+    current_price = float(recent["close"].iloc[-1]) if not recent.empty else 0.0
+    current_position_pct = 0.0
+    if range_high > range_low:
+        current_position_pct = (current_price - range_low) / (range_high - range_low) * 100
+
+    net_return_pct = 0.0
+    if len(recent) >= 2 and float(recent["close"].iloc[0]) != 0:
+        net_return_pct = (current_price / float(recent["close"].iloc[0]) - 1) * 100
+
+    abs_path_pct = float(recent["close"].pct_change().abs().sum() * 100) if len(recent) >= 2 else 0.0
+    path_efficiency = abs(net_return_pct) / max(abs_path_pct, 1e-9)
+
+    recent_start_date = recent["date"].iloc[0].strftime("%Y-%m-%d")
+    recent_end_date = recent["date"].iloc[-1].strftime("%Y-%m-%d")
+    recent_pivots = [pivot for pivot in pivots if pivot.date >= recent_start_date]
+    recent_swings = build_swings(recent_pivots)
+    recent_up_swings = sum(1 for swing in recent_swings if swing.direction == "up")
+    recent_down_swings = sum(1 for swing in recent_swings if swing.direction == "down")
+
+    recent_high = float(frame["close"].tail(60).max()) if len(frame) >= 60 else current_price
+    recent_low = float(frame["close"].tail(60).min()) if len(frame) >= 60 else current_price
+    breakout_up = current_price >= recent_high * 0.985 if recent_high else False
+    breakout_down = current_price <= recent_low * 1.015 if recent_low else False
+
+    return {
+        "recent_start_date": recent_start_date,
+        "recent_end_date": recent_end_date,
+        "range_low": sanitize_float(range_low, 2),
+        "range_high": sanitize_float(range_high, 2),
+        "current_position_pct": sanitize_float(current_position_pct, 1),
+        "amplitude_ratio": sanitize_float(amplitude_ratio, 2),
+        "liquidity_ratio": sanitize_float(liquidity_ratio, 2),
+        "net_return_pct": sanitize_float(net_return_pct, 2),
+        "path_efficiency": sanitize_float(path_efficiency, 2),
+        "recent_pivots": recent_pivots,
+        "recent_swings": recent_swings,
+        "recent_up_swings": recent_up_swings,
+        "recent_down_swings": recent_down_swings,
+        "breakout_up": breakout_up,
+        "breakout_down": breakout_down,
+    }
+
+
+def pick_regime_anchor_date(
+    label: str,
+    metrics: dict[str, float | int | str | list[PivotPoint] | list[SwingSegment]],
+    pivots: list[PivotPoint],
+) -> str:
+    recent_start_date = str(metrics.get("recent_start_date") or "")
+    recent_pivots = metrics.get("recent_pivots", [])
+    if not isinstance(recent_pivots, list):
+        recent_pivots = []
+
+    if label == "活跃波段区" and recent_pivots:
+        return recent_pivots[0].date
+
+    current_position_pct = float(metrics.get("current_position_pct") or 0.0)
+    if label == "趋势推进区":
+        anchor_kind = "low" if current_position_pct >= 50 else "high"
+        anchor = find_recent_pivot(pivots, anchor_kind)
+        if anchor:
+            return anchor.date
+
+    if recent_pivots:
+        return recent_pivots[0].date
+    if pivots:
+        return pivots[-1].date
+    return recent_start_date
+
+
+def build_cycle_regime(frame: pd.DataFrame, pivots: list[PivotPoint]) -> CycleRegime:
+    if frame.empty:
+        return CycleRegime(
+            label="待识别",
+            action_label="等待样本",
+            tone="neutral",
+            since_date="",
+            range_low=0.0,
+            range_high=0.0,
+            current_position_pct=0.0,
+            amplitude_ratio=0.0,
+            liquidity_ratio=0.0,
+            path_efficiency=0.0,
+            recent_swing_count=0,
+            summary="暂无足够样本识别当前属于区域还是趋势。",
+        )
+
+    metrics = build_recent_regime_metrics(frame, pivots)
+    amplitude_ratio = float(metrics["amplitude_ratio"])
+    liquidity_ratio = float(metrics["liquidity_ratio"])
+    range_low = float(metrics["range_low"])
+    range_high = float(metrics["range_high"])
+    width_pct = (range_high / range_low - 1) * 100 if range_low else 0.0
+    current_position_pct = float(metrics["current_position_pct"])
+    net_return_pct = float(metrics["net_return_pct"])
+    path_efficiency = float(metrics["path_efficiency"])
+    recent_swing_count = len(metrics["recent_swings"]) if isinstance(metrics["recent_swings"], list) else 0
+    recent_up_swings = int(metrics["recent_up_swings"])
+    recent_down_swings = int(metrics["recent_down_swings"])
+    breakout_up = bool(metrics["breakout_up"])
+    breakout_down = bool(metrics["breakout_down"])
+
+    label = "低迷整理区"
+    action_label = "降级观察"
+    tone = "negative"
+    summary = "当前仍偏低迷整理，量能和振幅没有形成持续优势，交易价值一般。"
+
+    is_active_range = (
+        amplitude_ratio >= 1.25
+        and liquidity_ratio >= 1.10
+        and 25 <= width_pct <= 120
+        and 20 <= current_position_pct <= 80
+        and recent_swing_count >= 2
+        and recent_up_swings >= 1
+        and recent_down_swings >= 1
+        and abs(net_return_pct) <= 45
+        and path_efficiency <= 0.25
+    )
+    is_trend = (
+        width_pct >= 45
+        and (current_position_pct >= 82 or current_position_pct <= 18 or abs(net_return_pct) >= 55 or breakout_up or breakout_down)
+        and (recent_swing_count <= 1 or recent_up_swings == 0 or recent_down_swings == 0)
+    )
+    is_transition = amplitude_ratio >= 1.15 and width_pct >= 20
+
+    if is_active_range:
+        label = "活跃波段区"
+        action_label = "低买高抛"
+        tone = "positive"
+    elif is_trend:
+        label = "趋势推进区"
+        action_label = "顺势跟踪"
+        tone = "alert"
+    elif is_transition:
+        label = "区域切换区"
+        action_label = "等待新区域"
+        tone = "neutral"
+
+    since_date = pick_regime_anchor_date(label, metrics, pivots)
+    scoped = frame[frame["date"] >= pd.Timestamp(since_date)].copy() if since_date else frame.tail(80).copy()
+    if scoped.empty:
+        scoped = frame.tail(80).copy()
+
+    scoped_low = float(scoped["close"].min()) if not scoped.empty else range_low
+    scoped_high = float(scoped["close"].max()) if not scoped.empty else range_high
+    current_price = float(scoped["close"].iloc[-1]) if not scoped.empty else 0.0
+    scoped_position_pct = 0.0
+    if scoped_high > scoped_low:
+        scoped_position_pct = (current_price - scoped_low) / (scoped_high - scoped_low) * 100
+
+    if label == "活跃波段区":
+        summary = (
+            f"自 {since_date} 起量能与振幅明显抬升，价格在 {scoped_low:.2f}-{scoped_high:.2f} 区间内反复换手。"
+            f"当前位于区间 {scoped_position_pct:.0f}% 附近，更适合按边界低买高抛。"
+        )
+    elif label == "趋势推进区":
+        direction = "向上" if current_position_pct >= 50 else "向下"
+        summary = (
+            f"自 {since_date} 起股价仍在从前一区域向新区域{direction}推进，当前还没找到新的稳定箱体。"
+            "这类票更适合顺势跟踪，不适合机械等完美回调。"
+        )
+    elif label == "区域切换区":
+        summary = (
+            f"自 {since_date} 起振幅或流动性开始抬升，但新区域边界还不稳定。"
+            "先观察它会沉淀成活跃波段区，还是继续发展成趋势推进区。"
+        )
+
+    return CycleRegime(
+        label=label,
+        action_label=action_label,
+        tone=tone,
+        since_date=since_date,
+        range_low=sanitize_float(scoped_low, 2),
+        range_high=sanitize_float(scoped_high, 2),
+        current_position_pct=sanitize_float(scoped_position_pct, 1),
+        amplitude_ratio=sanitize_float(amplitude_ratio, 2),
+        liquidity_ratio=sanitize_float(liquidity_ratio, 2),
+        path_efficiency=sanitize_float(path_efficiency, 2),
+        recent_swing_count=recent_swing_count,
+        summary=summary,
+    )
 
 
 def classify_score(score: int) -> tuple[str, str]:
@@ -390,8 +694,10 @@ def describe_latest_state(frame: pd.DataFrame, pivots: list[PivotPoint]) -> str:
 def build_cycle_summary(symbol: str, name: str, frame: pd.DataFrame) -> CycleSummary:
     pivots = detect_cycle_pivots(frame)
     swings = build_swings(pivots)
+    recent_cycles, current_cycle = build_cycle_windows(frame, pivots, swings)
     up_swings = [segment for segment in swings if segment.direction == "up"]
     down_swings = [segment for segment in swings if segment.direction == "down"]
+    regime = build_cycle_regime(frame, pivots)
     opportunity = assess_cycle_opportunity(frame, pivots)
 
     avg_up_days = sanitize_float(sum(item.trading_days for item in up_swings) / len(up_swings), 1) if up_swings else 0.0
@@ -433,7 +739,10 @@ def build_cycle_summary(symbol: str, name: str, frame: pd.DataFrame) -> CycleSum
         latest_state=describe_latest_state(frame, pivots),
         chart_path=str(chart_path.relative_to(ROOT)).replace("\\", "/"),
         grid_path=str(GRID_PATH.relative_to(ROOT)).replace("\\", "/"),
+        regime=regime,
         opportunity=opportunity,
+        recent_cycles=recent_cycles,
+        current_cycle=current_cycle,
         pivots=pivots,
         swings=swings,
     )
@@ -569,13 +878,13 @@ def write_summary_markdown(reports: list[CycleSummary]) -> None:
         "",
         "## 建议保留",
         "",
-        "| 代码 | 名称 | score | 周期判断 | 最新状态 | 图 |",
-        "| --- | --- | ---: | --- | --- | --- |",
+        "| 代码 | 名称 | score | 周期判断 | 当前状态区 | 最新状态 | 图 |",
+        "| --- | --- | ---: | --- | --- | --- | --- |",
     ]
 
     for report in keep_list:
         lines.append(
-            f"| {report.symbol} | {report.name} | {report.score} | {report.level} | {report.latest_state} | "
+            f"| {report.symbol} | {report.name} | {report.score} | {report.level} | {report.regime.label} | {report.latest_state} | "
             f"[图](./stocks/{report.symbol}-cycle.png) |"
         )
 
@@ -584,13 +893,13 @@ def write_summary_markdown(reports: list[CycleSummary]) -> None:
             "",
             "## 观察后决定",
             "",
-            "| 代码 | 名称 | score | 周期判断 | 最新状态 | 图 |",
-            "| --- | --- | ---: | --- | --- | --- |",
+            "| 代码 | 名称 | score | 周期判断 | 当前状态区 | 最新状态 | 图 |",
+            "| --- | --- | ---: | --- | --- | --- | --- |",
         ]
     )
     for report in watch_list:
         lines.append(
-            f"| {report.symbol} | {report.name} | {report.score} | {report.level} | {report.latest_state} | "
+            f"| {report.symbol} | {report.name} | {report.score} | {report.level} | {report.regime.label} | {report.latest_state} | "
             f"[图](./stocks/{report.symbol}-cycle.png) |"
         )
 
@@ -599,13 +908,13 @@ def write_summary_markdown(reports: list[CycleSummary]) -> None:
             "",
             "## 候选淘汰",
             "",
-            "| 代码 | 名称 | score | 周期判断 | 最新状态 | 图 |",
-            "| --- | --- | ---: | --- | --- | --- |",
+            "| 代码 | 名称 | score | 周期判断 | 当前状态区 | 最新状态 | 图 |",
+            "| --- | --- | ---: | --- | --- | --- | --- |",
         ]
     )
     for report in drop_list:
         lines.append(
-            f"| {report.symbol} | {report.name} | {report.score} | {report.level} | {report.latest_state} | "
+            f"| {report.symbol} | {report.name} | {report.score} | {report.level} | {report.regime.label} | {report.latest_state} | "
             f"[图](./stocks/{report.symbol}-cycle.png) |"
         )
 
@@ -614,13 +923,13 @@ def write_summary_markdown(reports: list[CycleSummary]) -> None:
             "",
             "## 全量明细",
             "",
-            "| 代码 | 名称 | score | 波峰波谷数 | 波段数 | 平均上涨天数 | 平均下跌天数 | 平均上涨幅度 | 平均下跌幅度 | Duration CV | Amplitude CV | 建议 |",
-            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+            "| 代码 | 名称 | score | 当前状态区 | 波峰波谷数 | 波段数 | 平均上涨天数 | 平均下跌天数 | 平均上涨幅度 | 平均下跌幅度 | Duration CV | Amplitude CV | 建议 |",
+            "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
         ]
     )
     for report in reports:
         lines.append(
-            f"| {report.symbol} | {report.name} | {report.score} | {report.pivot_count} | {report.swing_count} | "
+            f"| {report.symbol} | {report.name} | {report.score} | {report.regime.label} | {report.pivot_count} | {report.swing_count} | "
             f"{report.avg_up_days:.1f} | {report.avg_down_days:.1f} | {report.avg_up_return_pct:.1f}% | "
             f"{report.avg_down_return_pct:.1f}% | {report.duration_cv:.2f} | {report.amplitude_cv:.2f} | {report.recommendation} |"
         )

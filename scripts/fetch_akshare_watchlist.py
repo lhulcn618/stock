@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timedelta
 import math
 from pathlib import Path
@@ -7,7 +7,10 @@ import re
 import time
 
 import akshare as ak
+import baostock as bs
+import numpy as np
 import pandas as pd
+import requests
 
 ROOT = Path(__file__).resolve().parents[1]
 WATCHLIST_TS_PATH = ROOT / "src" / "data" / "watchlist.ts"
@@ -20,6 +23,12 @@ CAP_CACHE_DIR = CACHE_ROOT / "cap"
 META_CACHE_DIR = CACHE_ROOT / "meta"
 NAME_CACHE_PATH = CACHE_ROOT / "name-map.json"
 SPOT_CACHE_PATH = CACHE_ROOT / "spot-snapshot.json"
+BOARD_CACHE_DIR = CACHE_ROOT / "boards"
+BOARD_LIST_CACHE_DIR = BOARD_CACHE_DIR / "lists"
+BOARD_MEMBER_CACHE_DIR = BOARD_CACHE_DIR / "members"
+ETF_DAILY_CACHE_PATH = CACHE_ROOT / "etf-daily.json"
+US_CACHE_DIR = CACHE_ROOT / "us"
+MARKET_BREADTH_CACHE_PATH = CACHE_ROOT / "market-breadth.json"
 
 C_CODE = "代码"
 C_NAME = "名称"
@@ -47,10 +56,42 @@ SPOT_CACHE_TTL_SECONDS = 10 * 60
 HIST_CACHE_TTL_SECONDS = 24 * 60 * 60
 CAP_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 META_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60
-STOCK_CACHE_VERSION = 8
+STOCK_CACHE_VERSION = 16
+BOARD_LIST_CACHE_TTL_SECONDS = 6 * 60 * 60
+BOARD_MEMBER_CACHE_TTL_SECONDS = 12 * 60 * 60
+ETF_DAILY_CACHE_TTL_SECONDS = 12 * 60 * 60
+US_DAILY_CACHE_TTL_SECONDS = 12 * 60 * 60
+MARKET_BREADTH_CACHE_TTL_SECONDS = 5 * 60
 WATCHLIST_ENTRY_PATTERN = re.compile(
     r'\{\s*code:\s*["\'](?P<code>\d{6})["\']\s*,\s*name:\s*["\'](?P<name>[^"\']*)["\']\s*\}'
 )
+
+BAOSTOCK_DAILY_FIELDS = "date,open,high,low,close,preclose,volume,amount,pctChg"
+BAOSTOCK_CHIP_FIELDS = "date,close,preclose,volume,amount,turn"
+_BAOSTOCK_LOGGED_IN = False
+
+HOT_INDUSTRY_SCAN_LIMIT = 18
+HOT_CONCEPT_SCAN_LIMIT = 36
+MAX_STOCK_HOT_BOARDS = 6
+MAX_STOCK_ETFS = 3
+MAX_GLOBAL_BOARDS = 8
+MAX_GLOBAL_ETFS = 8
+
+LEGU_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+}
+
+US_FOCUS_DEFINITIONS = [
+    {"key": "AAPL", "name": "Apple", "symbol": "AAPL", "category": "七姐妹", "newsSymbol": "AAPL"},
+    {"key": "MSFT", "name": "Microsoft", "symbol": "MSFT", "category": "七姐妹", "newsSymbol": "MSFT"},
+    {"key": "NVDA", "name": "NVIDIA", "symbol": "NVDA", "category": "七姐妹", "newsSymbol": "NVDA"},
+    {"key": "AMZN", "name": "Amazon", "symbol": "AMZN", "category": "七姐妹", "newsSymbol": "AMZN"},
+    {"key": "GOOGL", "name": "Alphabet", "symbol": "GOOGL", "category": "七姐妹", "newsSymbol": "GOOGL"},
+    {"key": "META", "name": "Meta", "symbol": "META", "category": "七姐妹", "newsSymbol": "META"},
+    {"key": "TSLA", "name": "Tesla / 马斯克", "symbol": "TSLA", "category": "七姐妹", "newsSymbol": "TSLA"},
+    {"key": "OPENAI", "name": "OpenAI", "symbol": "", "category": "AI 公司", "newsSymbol": "OpenAI"},
+]
 
 NOTE_POOL = [
     "收盘前观察盘口是否确认当前形态。",
@@ -135,6 +176,30 @@ POLICY_KEYWORDS = [
     "国常会",
     "十四五",
 ]
+
+BOARD_NOISE_KEYWORDS = {
+    "政策",
+    "规划",
+    "方案",
+    "试点",
+    "工作报告",
+    "补贴",
+    "指南",
+    "审批",
+    "医保",
+    "监管",
+    "工信部",
+    "国家发改委",
+    "国务院",
+    "证监会",
+    "卫健委",
+    "药监局",
+    "商务部",
+    "财政部",
+    "两会",
+    "国常会",
+    "十四五",
+}
 
 
 @dataclass
@@ -249,6 +314,63 @@ class TechnicalIndicators:
 
 
 @dataclass
+class BollingerPoint:
+    date: str
+    middle: float
+    upper: float
+    lower: float
+
+
+@dataclass
+class BollingerProfile:
+    period: int
+    stdMultiplier: float
+    points: list[BollingerPoint]
+
+
+@dataclass
+class ChipDistributionBand:
+    price: float
+    ratio: float
+
+
+@dataclass
+class ChipControlEvidence:
+    key: str
+    label: str
+    value: str
+    tone: str
+    summary: str
+
+
+@dataclass
+class ChipDistributionProfile:
+    algorithm: str
+    bucketSize: float
+    sampleSize: int
+    tradeDate: str
+    mainCost: float
+    mainCostZoneLow: float
+    mainCostZoneHigh: float
+    mainCostZoneWidthPct: float
+    averageCost: float
+    winnerRatio: float
+    dominantRatio: float
+    concentration70Low: float
+    concentration70High: float
+    concentration90Low: float
+    concentration90High: float
+    currentPriceBiasPct: float
+    shapeLabel: str
+    stageLabel: str
+    riskLabel: str
+    tone: str
+    summary: str
+    controlEvidence: list[ChipControlEvidence]
+    bands: list[ChipDistributionBand]
+
+
+@dataclass
 class ScoreFactor:
     key: str
     label: str
@@ -302,6 +424,121 @@ class AmplitudeDistributionProfile:
 
 
 @dataclass
+class ThemeHotspot:
+    boardType: str
+    name: str
+    code: str
+    rank: int
+    changePct: float
+    riseCount: int
+    fallCount: int
+    leaderName: str
+    leaderCode: str
+    leaderChangePct: float
+    matchReason: str
+
+
+@dataclass
+class StockThemeLinkage:
+    updatedAt: str
+    industry: str
+    concepts: list[str]
+    matchedKeywords: list[str]
+    hotBoards: list[ThemeHotspot]
+    relatedEtfs: list[ThemeHotspot]
+    summary: str
+
+
+@dataclass
+class UsFocusItem:
+    key: str
+    name: str
+    symbol: str
+    category: str
+    lastTradeDate: str
+    close: float
+    prevClose: float
+    changePct: float
+    high: float
+    low: float
+    volume: float
+    tone: str
+    summary: str
+    news: list[NewsInsightItem]
+
+
+@dataclass
+class UsMarketPulse:
+    updatedAt: str
+    tradeDate: str
+    summary: str
+    items: list[UsFocusItem]
+
+
+@dataclass
+class MarketBreadthPoint:
+    timestamp: str
+    totalUp: int
+    totalDown: int
+    limitUp: int
+    limitDown: int
+    flatCount: int
+    netAdvance: int
+
+
+@dataclass
+class MarketBreadthProfile:
+    updatedAt: str
+    tradeDate: str
+    activityPct: float
+    upCount: int
+    downCount: int
+    flatCount: int
+    limitUpCount: int
+    limitDownCount: int
+    netAdvance: int
+    advanceDeclineRatio: float
+    breadthLow: int
+    breadthHigh: int
+    tone: str
+    signalLabel: str
+    summary: str
+    trendPoints: list[MarketBreadthPoint]
+
+
+@dataclass
+class MarketRadar:
+    updatedAt: str
+    hottestBoards: list[ThemeHotspot]
+    hottestEtfs: list[ThemeHotspot]
+    usMarketPulse: UsMarketPulse
+    marketBreadth: MarketBreadthProfile
+
+
+@dataclass
+class CandlePoint:
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    isLimitUpClose: bool
+
+
+@dataclass
+class LimitUpSignalProfile:
+    recentLimitUpCount10: int
+    isHoldingAboveOpen: bool
+    anchorDate: str
+    anchorOpen: float
+    anchorClose: float
+    holdDays: int
+    currentBiasPct: float
+    tone: str
+    summary: str
+
+
+@dataclass
 class WatchStock:
     symbol: str
     name: str
@@ -314,6 +551,10 @@ class WatchStock:
     note: str
     thesis: str
     sparkline: list[float]
+    candles: list[CandlePoint]
+    limitUpSignal: LimitUpSignalProfile
+    bollinger: BollingerProfile
+    chipDistribution: ChipDistributionProfile
     signals: list[Signal]
     metadata: StockMetadata
     companyInsight: CompanyInsight
@@ -321,6 +562,7 @@ class WatchStock:
     selectionScore: SelectionScore
     priceDistribution: PriceDistributionProfile
     amplitudeDistribution: AmplitudeDistributionProfile
+    themeLinkage: StockThemeLinkage
 
 
 def band_from_dict(data: dict) -> PriceDistributionBand:
@@ -361,6 +603,162 @@ def amplitude_distribution_from_dict(data: dict) -> AmplitudeDistributionProfile
         currentBand=int(data.get("currentBand", 0)),
         dominantBand=int(data.get("dominantBand", 0)),
         bands=bands,
+    )
+
+
+def chip_band_from_dict(data: dict) -> ChipDistributionBand:
+    return ChipDistributionBand(
+        price=float(data.get("price", 0.0)),
+        ratio=float(data.get("ratio", 0.0)),
+    )
+
+
+def chip_control_evidence_from_dict(data: dict) -> ChipControlEvidence:
+    if not isinstance(data, dict):
+        return ChipControlEvidence("", "", "", "neutral", "")
+
+    return ChipControlEvidence(
+        key=str(data.get("key", "")),
+        label=str(data.get("label", "")),
+        value=str(data.get("value", "")),
+        tone=str(data.get("tone", "neutral")),
+        summary=str(data.get("summary", "")),
+    )
+
+
+def chip_distribution_from_dict(data: dict) -> ChipDistributionProfile:
+    if not isinstance(data, dict):
+        return default_chip_distribution()
+
+    raw_bands = data.get("bands", [])
+    bands = [chip_band_from_dict(item) for item in raw_bands if isinstance(item, dict)]
+    raw_evidence = data.get("controlEvidence", [])
+    control_evidence = [chip_control_evidence_from_dict(item) for item in raw_evidence if isinstance(item, dict)]
+    return ChipDistributionProfile(
+        algorithm=str(data.get("algorithm", "turnover_decay_v1")),
+        bucketSize=float(data.get("bucketSize", 0.1)),
+        sampleSize=int(data.get("sampleSize", 0)),
+        tradeDate=str(data.get("tradeDate", "")),
+        mainCost=float(data.get("mainCost", 0.0)),
+        mainCostZoneLow=float(data.get("mainCostZoneLow", data.get("mainCost", 0.0))),
+        mainCostZoneHigh=float(data.get("mainCostZoneHigh", data.get("mainCost", 0.0))),
+        mainCostZoneWidthPct=float(data.get("mainCostZoneWidthPct", 0.0)),
+        averageCost=float(data.get("averageCost", 0.0)),
+        winnerRatio=float(data.get("winnerRatio", 0.0)),
+        dominantRatio=float(data.get("dominantRatio", 0.0)),
+        concentration70Low=float(data.get("concentration70Low", 0.0)),
+        concentration70High=float(data.get("concentration70High", 0.0)),
+        concentration90Low=float(data.get("concentration90Low", 0.0)),
+        concentration90High=float(data.get("concentration90High", 0.0)),
+        currentPriceBiasPct=float(data.get("currentPriceBiasPct", 0.0)),
+        shapeLabel=str(data.get("shapeLabel", "筹码待观察")),
+        stageLabel=str(data.get("stageLabel", "等待样本")),
+        riskLabel=str(data.get("riskLabel", "等待刷新")),
+        tone=str(data.get("tone", "neutral")),
+        summary=str(data.get("summary", "暂无筹码分布样本")),
+        controlEvidence=control_evidence,
+        bands=bands,
+    )
+
+
+def theme_hotspot_from_dict(data: dict) -> ThemeHotspot:
+    if not isinstance(data, dict):
+        return ThemeHotspot("concept", "", "", 0, 0.0, 0, 0, "", "", 0.0, "")
+
+    return ThemeHotspot(
+        boardType=str(data.get("boardType", "concept")),
+        name=str(data.get("name", "")),
+        code=str(data.get("code", "")),
+        rank=int(data.get("rank", 0)),
+        changePct=float(data.get("changePct", 0.0)),
+        riseCount=int(data.get("riseCount", 0)),
+        fallCount=int(data.get("fallCount", 0)),
+        leaderName=str(data.get("leaderName", "")),
+        leaderCode=str(data.get("leaderCode", "")),
+        leaderChangePct=float(data.get("leaderChangePct", 0.0)),
+        matchReason=str(data.get("matchReason", "")),
+    )
+
+
+def market_breadth_point_from_dict(data: dict) -> MarketBreadthPoint:
+    if not isinstance(data, dict):
+        return MarketBreadthPoint("", 0, 0, 0, 0, 0, 0)
+
+    return MarketBreadthPoint(
+        timestamp=str(data.get("timestamp", "")),
+        totalUp=int(data.get("totalUp", 0)),
+        totalDown=int(data.get("totalDown", 0)),
+        limitUp=int(data.get("limitUp", 0)),
+        limitDown=int(data.get("limitDown", 0)),
+        flatCount=int(data.get("flatCount", 0)),
+        netAdvance=int(data.get("netAdvance", 0)),
+    )
+
+
+def market_breadth_from_dict(data: dict) -> MarketBreadthProfile:
+    if not isinstance(data, dict):
+        return default_market_breadth()
+
+    trend_points = [
+        market_breadth_point_from_dict(item)
+        for item in data.get("trendPoints", [])
+        if isinstance(item, dict)
+    ]
+    return MarketBreadthProfile(
+        updatedAt=str(data.get("updatedAt", "")),
+        tradeDate=str(data.get("tradeDate", "")),
+        activityPct=float(data.get("activityPct", 0.0)),
+        upCount=int(data.get("upCount", 0)),
+        downCount=int(data.get("downCount", 0)),
+        flatCount=int(data.get("flatCount", 0)),
+        limitUpCount=int(data.get("limitUpCount", 0)),
+        limitDownCount=int(data.get("limitDownCount", 0)),
+        netAdvance=int(data.get("netAdvance", 0)),
+        advanceDeclineRatio=float(data.get("advanceDeclineRatio", 0.0)),
+        breadthLow=int(data.get("breadthLow", 0)),
+        breadthHigh=int(data.get("breadthHigh", 0)),
+        tone=str(data.get("tone", "neutral")),
+        signalLabel=str(data.get("signalLabel", "鏆傛棤甯傚満瀹藉害鏍锋湰")),
+        summary=str(data.get("summary", "鏆傛棤涓婃定/涓嬭穼瀹舵暟鏇茬嚎")),
+        trendPoints=trend_points,
+    )
+
+
+def stock_theme_linkage_from_dict(data: dict) -> StockThemeLinkage:
+    if not isinstance(data, dict):
+        return default_stock_theme_linkage()
+
+    raw_hot_boards = data.get("hotBoards", [])
+    raw_related_etfs = data.get("relatedEtfs", [])
+    hot_boards = [theme_hotspot_from_dict(item) for item in raw_hot_boards if isinstance(item, dict)]
+    related_etfs = [theme_hotspot_from_dict(item) for item in raw_related_etfs if isinstance(item, dict)]
+    concepts = [str(item) for item in data.get("concepts", []) if isinstance(item, str)]
+    matched_keywords = [str(item) for item in data.get("matchedKeywords", []) if isinstance(item, str)]
+    return StockThemeLinkage(
+        updatedAt=str(data.get("updatedAt", "")),
+        industry=str(data.get("industry", "")),
+        concepts=concepts,
+        matchedKeywords=matched_keywords,
+        hotBoards=hot_boards,
+        relatedEtfs=related_etfs,
+        summary=str(data.get("summary", "暂无板块联动结果")),
+    )
+
+
+def limit_up_signal_from_dict(data: dict) -> LimitUpSignalProfile:
+    if not isinstance(data, dict):
+        return default_limit_up_signal()
+
+    return LimitUpSignalProfile(
+        recentLimitUpCount10=int(data.get("recentLimitUpCount10", 0)),
+        isHoldingAboveOpen=bool(data.get("isHoldingAboveOpen", False)),
+        anchorDate=str(data.get("anchorDate", "")),
+        anchorOpen=float(data.get("anchorOpen", 0.0)),
+        anchorClose=float(data.get("anchorClose", 0.0)),
+        holdDays=int(data.get("holdDays", 0)),
+        currentBiasPct=float(data.get("currentBiasPct", 0.0)),
+        tone=str(data.get("tone", "neutral")),
+        summary=str(data.get("summary", "暂无涨停守开信号")),
     )
 
 
@@ -531,6 +929,28 @@ def technicals_from_dict(data: dict) -> TechnicalIndicators:
     )
 
 
+def bollinger_from_dict(data: dict) -> BollingerProfile:
+    if not isinstance(data, dict):
+        return default_bollinger()
+
+    raw_points = data.get("points", [])
+    points = [
+        BollingerPoint(
+            date=str(item.get("date", "")),
+            middle=float(item.get("middle", 0.0)),
+            upper=float(item.get("upper", 0.0)),
+            lower=float(item.get("lower", 0.0)),
+        )
+        for item in raw_points
+        if isinstance(item, dict)
+    ]
+    return BollingerProfile(
+        period=int(data.get("period", 30)),
+        stdMultiplier=float(data.get("stdMultiplier", 2.0)),
+        points=points,
+    )
+
+
 def score_factor_from_dict(data: dict) -> ScoreFactor:
     if not isinstance(data, dict):
         return ScoreFactor("unknown", "未知", 0, 0, "neutral", "无数据")
@@ -571,6 +991,19 @@ def stock_from_dict(data: dict) -> WatchStock:
         for item in raw_signals
         if isinstance(item, dict)
     ]
+    raw_candles = data.get("candles", []) if isinstance(data, dict) else []
+    candles = [
+        CandlePoint(
+            date=str(item.get("date", "")),
+            open=float(item.get("open", 0.0)),
+            high=float(item.get("high", 0.0)),
+            low=float(item.get("low", 0.0)),
+            close=float(item.get("close", 0.0)),
+            isLimitUpClose=bool(item.get("isLimitUpClose", False)),
+        )
+        for item in raw_candles
+        if isinstance(item, dict)
+    ]
     return WatchStock(
         symbol=str(data.get("symbol", "")),
         name=str(data.get("name", "")),
@@ -583,6 +1016,10 @@ def stock_from_dict(data: dict) -> WatchStock:
         note=str(data.get("note", "")),
         thesis=str(data.get("thesis", "")),
         sparkline=[float(value) for value in data.get("sparkline", [])],
+        candles=candles,
+        limitUpSignal=limit_up_signal_from_dict(data.get("limitUpSignal", {})),
+        bollinger=bollinger_from_dict(data.get("bollinger", {})),
+        chipDistribution=chip_distribution_from_dict(data.get("chipDistribution", {})),
         signals=signals,
         metadata=metadata_from_dict(data.get("metadata", {})),
         companyInsight=company_insight_from_dict(data.get("companyInsight", {})),
@@ -590,6 +1027,7 @@ def stock_from_dict(data: dict) -> WatchStock:
         selectionScore=selection_score_from_dict(data.get("selectionScore", {})),
         priceDistribution=distribution_from_dict(data.get("priceDistribution", {})),
         amplitudeDistribution=amplitude_distribution_from_dict(data.get("amplitudeDistribution", {})),
+        themeLinkage=stock_theme_linkage_from_dict(data.get("themeLinkage", {})),
     )
 
 
@@ -598,6 +1036,9 @@ def ensure_cache_dirs() -> None:
     STOCK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     CAP_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     META_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    BOARD_LIST_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    BOARD_MEMBER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    US_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def read_watchlist_entries() -> list[dict[str, str]]:
@@ -673,6 +1114,53 @@ def default_technicals() -> TechnicalIndicators:
     )
 
 
+def default_bollinger() -> BollingerProfile:
+    return BollingerProfile(period=30, stdMultiplier=2.0, points=[])
+
+
+def default_limit_up_signal() -> LimitUpSignalProfile:
+    return LimitUpSignalProfile(
+        recentLimitUpCount10=0,
+        isHoldingAboveOpen=False,
+        anchorDate="",
+        anchorOpen=0.0,
+        anchorClose=0.0,
+        holdDays=0,
+        currentBiasPct=0.0,
+        tone="neutral",
+        summary="暂无涨停守开信号",
+    )
+
+
+def default_chip_distribution(current_price: float = 0.0) -> ChipDistributionProfile:
+    base_price = round(current_price, 2) if current_price > 0 else 0.0
+    return ChipDistributionProfile(
+        algorithm="turnover_decay_v1",
+        bucketSize=0.1,
+        sampleSize=0,
+        tradeDate="",
+        mainCost=base_price,
+        mainCostZoneLow=base_price,
+        mainCostZoneHigh=base_price,
+        mainCostZoneWidthPct=0.0,
+        averageCost=base_price,
+        winnerRatio=0.0,
+        dominantRatio=0.0,
+        concentration70Low=base_price,
+        concentration70High=base_price,
+        concentration90Low=base_price,
+        concentration90High=base_price,
+        currentPriceBiasPct=0.0,
+        shapeLabel="筹码待观察",
+        stageLabel="等待样本",
+        riskLabel="暂无主力成本区样本",
+        tone="neutral",
+        summary="暂无筹码分布样本",
+        controlEvidence=[],
+        bands=[],
+    )
+
+
 def default_selection_score() -> SelectionScore:
     return SelectionScore(
         total=0,
@@ -680,6 +1168,18 @@ def default_selection_score() -> SelectionScore:
         grade="D",
         summary="等待更多信号",
         factors=[],
+    )
+
+
+def default_stock_theme_linkage() -> StockThemeLinkage:
+    return StockThemeLinkage(
+        updatedAt="",
+        industry="",
+        concepts=[],
+        matchedKeywords=[],
+        hotBoards=[],
+        relatedEtfs=[],
+        summary="暂无板块联动结果",
     )
 
 
@@ -715,10 +1215,94 @@ def default_company_insight() -> CompanyInsight:
     )
 
 
+def default_us_market_pulse() -> UsMarketPulse:
+    return UsMarketPulse(
+        updatedAt="",
+        tradeDate="",
+        summary="暂无隔夜美股晨报",
+        items=[],
+    )
+
+
+def default_market_breadth() -> MarketBreadthProfile:
+    return MarketBreadthProfile(
+        updatedAt="",
+        tradeDate="",
+        activityPct=0.0,
+        upCount=0,
+        downCount=0,
+        flatCount=0,
+        limitUpCount=0,
+        limitDownCount=0,
+        netAdvance=0,
+        advanceDeclineRatio=0.0,
+        breadthLow=0,
+        breadthHigh=0,
+        tone="neutral",
+        signalLabel="鏆傛棤甯傚満瀹藉害鏍锋湰",
+        summary="鏆傛棤涓婃定/涓嬭穼瀹舵暟鏇茬嚎",
+        trendPoints=[],
+    )
+
+
+def default_market_radar() -> MarketRadar:
+    return MarketRadar(
+        updatedAt="",
+        hottestBoards=[],
+        hottestEtfs=[],
+        usMarketPulse=default_us_market_pulse(),
+        marketBreadth=default_market_breadth(),
+    )
+
+
 def normalize_text_block(value: object) -> str:
     text = normalize_label(value)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
+
+
+def to_float(value: object, default: float = 0.0) -> float:
+    try:
+        result = float(value)
+        if math.isnan(result):
+            return default
+        return result
+    except (TypeError, ValueError):
+        return default
+
+
+def is_shanghai_symbol(symbol: str) -> bool:
+    return symbol.startswith(("600", "601", "603", "605", "688", "900"))
+
+
+def baostock_symbol(symbol: str) -> str | None:
+    if is_shanghai_symbol(symbol):
+        return f"sh.{symbol}"
+    if symbol.startswith(("000", "001", "002", "003", "200", "300", "301")):
+        return f"sz.{symbol}"
+    return None
+
+
+def ensure_baostock_login() -> None:
+    global _BAOSTOCK_LOGGED_IN
+    if _BAOSTOCK_LOGGED_IN:
+        return
+
+    result = bs.login()
+    if result.error_code != "0":
+        raise RuntimeError(f"baostock login failed: {result.error_code} {result.error_msg}")
+    _BAOSTOCK_LOGGED_IN = True
+
+
+def logout_baostock() -> None:
+    global _BAOSTOCK_LOGGED_IN
+    if not _BAOSTOCK_LOGGED_IN:
+        return
+
+    try:
+        bs.logout()
+    finally:
+        _BAOSTOCK_LOGGED_IN = False
 
 
 def truncate_text(value: object, limit: int) -> str:
@@ -750,6 +1334,32 @@ def unique_in_order(values: list[str]) -> list[str]:
     return result
 
 
+def normalize_float(value: object, default: float = 0.0) -> float:
+    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+        return float(value)
+
+    text = normalize_text_block(value)
+    if not text:
+        return default
+    text = text.replace("%", "").replace(",", "")
+    try:
+        return float(text)
+    except ValueError:
+        return default
+
+
+def normalize_int(value: object, default: int = 0) -> int:
+    return int(round(normalize_float(value, float(default))))
+
+
+def tone_from_change(change_pct: float) -> str:
+    if change_pct >= 1.5:
+        return "positive"
+    if change_pct <= -1.5:
+        return "negative"
+    return "neutral"
+
+
 def symbol_for_zygc(symbol: str) -> str:
     prefix = "SH" if symbol.startswith(("600", "601", "603", "605", "688")) else "SZ"
     return f"{prefix}{symbol}"
@@ -759,6 +1369,10 @@ def extract_theme_keywords(*texts: object) -> list[str]:
     haystack = " ".join(normalize_text_block(item) for item in texts if item is not None)
     matched = [keyword for keyword in THEME_KEYWORDS + POLICY_KEYWORDS if keyword and keyword in haystack]
     return unique_in_order(matched)
+
+
+def extract_actionable_theme_keywords(*texts: object) -> list[str]:
+    return [keyword for keyword in extract_theme_keywords(*texts) if keyword not in BOARD_NOISE_KEYWORDS]
 
 
 def score_news_level(score: int) -> str:
@@ -827,6 +1441,18 @@ def load_snapshot_stock_map() -> dict[str, WatchStock]:
             stock_map[stock.symbol] = stock
 
     return stock_map
+
+
+def load_snapshot_payload() -> dict:
+    if not OUTPUT_PATH.exists():
+        return {}
+
+    try:
+        payload = json.loads(OUTPUT_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    return payload if isinstance(payload, dict) else {}
 
 
 def sanitize_json_value(value):
@@ -988,6 +1614,41 @@ def meta_cache_path(symbol: str) -> Path:
     return META_CACHE_DIR / f"{symbol}.json"
 
 
+def board_list_cache_path(board_type: str) -> Path:
+    return BOARD_LIST_CACHE_DIR / f"{board_type}.json"
+
+
+def board_member_cache_path(board_type: str, board_code: str) -> Path:
+    return BOARD_MEMBER_CACHE_DIR / f"{board_type}-{board_code}.json"
+
+
+def us_daily_cache_path(symbol: str) -> Path:
+    return US_CACHE_DIR / f"{symbol.lower()}-daily.json"
+
+
+def us_news_cache_path(symbol: str) -> Path:
+    safe_symbol = re.sub(r"[^A-Za-z0-9_-]+", "-", symbol)
+    return US_CACHE_DIR / f"{safe_symbol.lower()}-news.json"
+
+
+def load_frame_cache(path: Path) -> tuple[pd.DataFrame, dict | None]:
+    payload = load_json_cache(path)
+    rows = payload.get("rows", []) if payload else []
+    if not isinstance(rows, list):
+        return pd.DataFrame(), payload
+    return pd.DataFrame(rows), payload
+
+
+def write_frame_cache(path: Path, frame: pd.DataFrame, extra: dict | None = None) -> None:
+    payload = {
+        "fetchedAt": now_iso(),
+        "rows": frame.to_dict(orient="records"),
+    }
+    if extra:
+        payload.update(extra)
+    write_json_cache(path, payload)
+
+
 def load_hist_cache(symbol: str) -> tuple[pd.DataFrame, dict | None]:
     payload = load_json_cache(hist_cache_path(symbol))
     rows = payload.get("rows", []) if payload else []
@@ -1006,10 +1667,15 @@ def load_hist_cache(symbol: str) -> tuple[pd.DataFrame, dict | None]:
         column_map["high"] = C_HIGH
     if "low" in normalized.columns and C_LOW not in normalized.columns:
         column_map["low"] = C_LOW
-    if "amount" in normalized.columns and C_VOLUME not in normalized.columns:
+    if "amount" in normalized.columns and "volume" not in normalized.columns and C_VOLUME not in normalized.columns:
         column_map["amount"] = C_VOLUME
     if column_map:
         normalized = normalized.rename(columns=column_map)
+
+    if "date" not in normalized.columns and "日期" in normalized.columns:
+        normalized["date"] = normalized["日期"].astype(str)
+    elif "日期" not in normalized.columns and "date" in normalized.columns:
+        normalized["日期"] = normalized["date"].astype(str)
 
     if C_CLOSE not in normalized.columns:
         return pd.DataFrame(), payload
@@ -1440,6 +2106,640 @@ def build_company_insight(symbol: str, fallback_insight: CompanyInsight | None =
     return fallback
 
 
+def fetch_with_retries(fetcher, attempts: int = 3, sleep_seconds: float = 0.8):
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return fetcher()
+        except Exception as exc:
+            last_error = exc
+            if attempt < attempts:
+                time.sleep(sleep_seconds * attempt)
+    if last_error:
+        raise last_error
+    raise RuntimeError("fetch failed without an explicit error")
+
+
+def build_theme_hotspot(row: dict | pd.Series, board_type: str, match_reason: str = "") -> ThemeHotspot:
+    source = row.to_dict() if isinstance(row, pd.Series) else row
+    return ThemeHotspot(
+        boardType=board_type,
+        name=normalize_label(source.get("板块名称") or source.get("基金简称") or source.get("名称") or ""),
+        code=str(source.get("板块代码") or source.get("基金代码") or source.get("代码") or ""),
+        rank=normalize_int(source.get("排名"), 0),
+        changePct=round(normalize_float(source.get("涨跌幅") or source.get("增长率数值") or source.get("增长率")), 2),
+        riseCount=normalize_int(source.get("上涨家数"), 0),
+        fallCount=normalize_int(source.get("下跌家数"), 0),
+        leaderName=normalize_label(source.get("领涨股票") or ""),
+        leaderCode=str(source.get("领涨股票代码") or ""),
+        leaderChangePct=round(normalize_float(source.get("领涨股票-涨跌幅")), 2),
+        matchReason=match_reason,
+    )
+
+
+def fetch_hot_board_frame(board_type: str) -> pd.DataFrame:
+    cache_path = board_list_cache_path(board_type)
+    cached_df, cached_payload = load_frame_cache(cache_path)
+    if not cached_df.empty and is_cache_fresh(cached_payload, BOARD_LIST_CACHE_TTL_SECONDS):
+        return cached_df
+
+    fetcher = ak.stock_board_concept_name_em if board_type == "concept" else ak.stock_board_industry_name_em
+    try:
+        frame = fetch_with_retries(fetcher)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            write_frame_cache(cache_path, frame)
+            return frame
+    except Exception as exc:
+        print(f"Warning: failed to fetch {board_type} board list: {exc}")
+
+    return cached_df
+
+
+def fetch_board_member_frame(board: ThemeHotspot) -> pd.DataFrame:
+    board_code = board.code or board.name
+    cache_path = board_member_cache_path(board.boardType, board_code or board.name)
+    cached_df, cached_payload = load_frame_cache(cache_path)
+    if not cached_df.empty and is_cache_fresh(cached_payload, BOARD_MEMBER_CACHE_TTL_SECONDS):
+        return cached_df
+
+    fetcher = ak.stock_board_concept_cons_em if board.boardType == "concept" else ak.stock_board_industry_cons_em
+    board_symbol = board.code or board.name
+    try:
+        frame = fetch_with_retries(lambda: fetcher(symbol=board_symbol), attempts=2, sleep_seconds=1.0)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            normalized = frame.copy()
+            if "代码" in normalized.columns:
+                normalized["代码"] = normalized["代码"].astype(str).str.zfill(6)
+            write_frame_cache(cache_path, normalized, {"boardName": board.name, "boardCode": board.code})
+            return normalized
+    except Exception as exc:
+        print(f"Warning: failed to fetch {board.boardType} members for {board.name}: {exc}")
+
+    return cached_df
+
+
+def fetch_etf_daily_frame() -> pd.DataFrame:
+    cached_df, cached_payload = load_frame_cache(ETF_DAILY_CACHE_PATH)
+    if not cached_df.empty and is_cache_fresh(cached_payload, ETF_DAILY_CACHE_TTL_SECONDS):
+        return cached_df
+
+    try:
+        frame = fetch_with_retries(ak.fund_etf_fund_daily_em, attempts=2, sleep_seconds=1.0)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            normalized = frame.copy()
+            normalized["基金代码"] = normalized["基金代码"].astype(str).str.zfill(6)
+            normalized["基金简称"] = normalized["基金简称"].astype(str)
+            normalized["类型"] = normalized["类型"].astype(str)
+            normalized["增长率数值"] = normalized["增长率"].apply(normalize_float)
+            normalized["市价数值"] = normalized["市价"].apply(normalize_float)
+            write_frame_cache(ETF_DAILY_CACHE_PATH, normalized)
+            return normalized
+    except Exception as exc:
+        print(f"Warning: failed to fetch ETF daily data: {exc}")
+
+    return cached_df
+
+
+def fetch_us_daily_frame(symbol: str) -> pd.DataFrame:
+    cache_path = us_daily_cache_path(symbol)
+    cached_df, cached_payload = load_frame_cache(cache_path)
+    if not cached_df.empty and is_cache_fresh(cached_payload, US_DAILY_CACHE_TTL_SECONDS):
+        return cached_df
+
+    try:
+        frame = fetch_with_retries(lambda: ak.stock_us_daily(symbol=symbol, adjust=""), attempts=2, sleep_seconds=1.0)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            normalized = frame.copy()
+            normalized["date"] = pd.to_datetime(normalized["date"], errors="coerce").dt.strftime("%Y-%m-%d")
+            for column in ["open", "high", "low", "close", "volume"]:
+                if column in normalized.columns:
+                    normalized[column] = pd.to_numeric(normalized[column], errors="coerce")
+            write_frame_cache(cache_path, normalized.tail(40), {"symbol": symbol})
+            return normalized
+    except Exception as exc:
+        print(f"Warning: failed to fetch US daily data for {symbol}: {exc}")
+
+    return cached_df
+
+
+def normalize_news_rows(frame: pd.DataFrame, limit: int = 3) -> list[NewsInsightItem]:
+    if frame.empty:
+        return []
+
+    items: list[NewsInsightItem] = []
+    for _, row in frame.head(limit).iterrows():
+        keyword = normalize_label(row.get("关键词", ""))
+        items.append(
+            NewsInsightItem(
+                title=normalize_text_block(row.get("新闻标题", "")),
+                publishTime=format_date_value(row.get("发布时间", "")),
+                source=normalize_text_block(row.get("文章来源", "")),
+                url=normalize_website_url(row.get("新闻链接", "")),
+                excerpt=truncate_text(row.get("新闻内容", ""), 120),
+                matchedKeywords=[keyword] if keyword else [],
+            )
+        )
+    return items
+
+
+def fetch_us_news_items(symbol: str, limit: int = 3) -> list[NewsInsightItem]:
+    cache_path = us_news_cache_path(symbol)
+    cached_df, cached_payload = load_frame_cache(cache_path)
+    if not cached_df.empty and is_cache_fresh(cached_payload, US_DAILY_CACHE_TTL_SECONDS):
+        return normalize_news_rows(cached_df, limit)
+
+    try:
+        frame = fetch_with_retries(lambda: ak.stock_news_em(symbol=symbol), attempts=2, sleep_seconds=1.0)
+        if isinstance(frame, pd.DataFrame) and not frame.empty:
+            write_frame_cache(cache_path, frame.head(20), {"symbol": symbol})
+            return normalize_news_rows(frame, limit)
+    except Exception as exc:
+        print(f"Warning: failed to fetch US/news items for {symbol}: {exc}")
+
+    return normalize_news_rows(cached_df, limit)
+
+
+def build_us_focus_item(definition: dict[str, str]) -> UsFocusItem:
+    symbol = definition.get("symbol", "")
+    news_symbol = definition.get("newsSymbol", "") or symbol
+    news_items = fetch_us_news_items(news_symbol, limit=3)
+
+    if symbol:
+        daily_frame = fetch_us_daily_frame(symbol)
+        if len(daily_frame.index) >= 2:
+            latest = daily_frame.iloc[-1]
+            previous = daily_frame.iloc[-2]
+            close = normalize_float(latest.get("close"))
+            prev_close = normalize_float(previous.get("close"))
+            change_pct = round(((close - prev_close) / prev_close * 100), 2) if prev_close else 0.0
+            summary_parts = [
+                f"上一交易日收于 {close:.2f}",
+                f"涨跌幅 {change_pct:+.2f}%",
+            ]
+            if news_items:
+                summary_parts.append(news_items[0].title)
+            return UsFocusItem(
+                key=definition.get("key", symbol),
+                name=definition.get("name", symbol),
+                symbol=symbol,
+                category=definition.get("category", ""),
+                lastTradeDate=str(latest.get("date", "")),
+                close=close,
+                prevClose=prev_close,
+                changePct=change_pct,
+                high=normalize_float(latest.get("high")),
+                low=normalize_float(latest.get("low")),
+                volume=normalize_float(latest.get("volume")),
+                tone=tone_from_change(change_pct),
+                summary="；".join(part for part in summary_parts if part),
+                news=news_items,
+            )
+
+    summary = news_items[0].title if news_items else "暂无最新新闻"
+    return UsFocusItem(
+        key=definition.get("key", news_symbol or "news"),
+        name=definition.get("name", news_symbol or "新闻"),
+        symbol=symbol,
+        category=definition.get("category", ""),
+        lastTradeDate=news_items[0].publishTime[:10] if news_items and news_items[0].publishTime else "",
+        close=0.0,
+        prevClose=0.0,
+        changePct=0.0,
+        high=0.0,
+        low=0.0,
+        volume=0.0,
+        tone="neutral",
+        summary=summary,
+        news=news_items,
+    )
+
+
+def build_us_market_pulse() -> UsMarketPulse:
+    items = [build_us_focus_item(definition) for definition in US_FOCUS_DEFINITIONS]
+    priced_items = [item for item in items if item.symbol and item.lastTradeDate]
+    if not priced_items:
+        return default_us_market_pulse()
+
+    up_count = sum(1 for item in priced_items if item.changePct >= 0)
+    down_count = len(priced_items) - up_count
+    leader = max(priced_items, key=lambda item: item.changePct)
+    laggard = min(priced_items, key=lambda item: item.changePct)
+    trade_date = max((item.lastTradeDate for item in priced_items if item.lastTradeDate), default="")
+    summary_parts = [
+        f"隔夜七姐妹 {up_count} 涨 {down_count} 跌",
+        f"领涨 {leader.name} {leader.changePct:+.2f}%",
+        f"领跌 {laggard.name} {laggard.changePct:+.2f}%",
+    ]
+    openai_item = next((item for item in items if item.key == "OPENAI"), None)
+    if openai_item and openai_item.summary:
+        summary_parts.append(f"OpenAI：{openai_item.summary}")
+
+    return UsMarketPulse(
+        updatedAt=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        tradeDate=trade_date,
+        summary="；".join(summary_parts),
+        items=items,
+    )
+
+
+def build_stock_theme_summary(hot_boards: list[ThemeHotspot], related_etfs: list[ThemeHotspot]) -> str:
+    if hot_boards:
+        board_names = "、".join(item.name for item in hot_boards[:2])
+        leader_parts = [
+            f"{item.name} 龙头 {item.leaderName}{item.leaderChangePct:+.2f}%"
+            for item in hot_boards[:2]
+            if item.leaderName
+        ]
+        etf_part = ""
+        if related_etfs:
+            etf_part = f"相关 ETF {related_etfs[0].name}{related_etfs[0].changePct:+.2f}%"
+        return "；".join(part for part in [f"热点重合：{board_names}", *leader_parts, etf_part] if part)
+
+    if related_etfs:
+        return f"未命中直接热点板块，相关 ETF 关注 {related_etfs[0].name}{related_etfs[0].changePct:+.2f}%"
+
+    return "当前未捕捉到与该股直接重合的热点板块"
+
+
+def build_cluster_hotspot(name: str, board_type: str, stocks: list[WatchStock], match_reason: str) -> ThemeHotspot:
+    leader = max(
+        stocks,
+        key=lambda item: (
+            item.changePct,
+            item.selectionScore.total,
+            item.volumeRatio,
+        ),
+    )
+    rise_count = sum(1 for item in stocks if item.changePct >= 0)
+    fall_count = len(stocks) - rise_count
+    avg_change = round(sum(item.changePct for item in stocks) / len(stocks), 2) if stocks else 0.0
+    return ThemeHotspot(
+        boardType=board_type,
+        name=name,
+        code="",
+        rank=0,
+        changePct=avg_change,
+        riseCount=rise_count,
+        fallCount=fall_count,
+        leaderName=leader.name,
+        leaderCode=leader.symbol,
+        leaderChangePct=round(leader.changePct, 2),
+        matchReason=match_reason,
+    )
+
+
+def build_watchlist_cluster_hotspots(stocks: list[WatchStock]) -> tuple[list[ThemeHotspot], list[ThemeHotspot], dict[str, list[str]]]:
+    industry_groups: dict[str, list[WatchStock]] = {}
+    concept_groups: dict[str, list[WatchStock]] = {}
+    stock_concepts: dict[str, list[str]] = {}
+
+    for stock in stocks:
+        industry_name = normalize_text_block(stock.companyInsight.officialBusiness.industry or stock.sector or "自选池")
+        industry_groups.setdefault(industry_name, []).append(stock)
+
+        concepts = unique_in_order(
+            extract_actionable_theme_keywords(
+                stock.name,
+                stock.sector,
+                stock.companyInsight.officialBusiness.industry,
+                stock.companyInsight.officialBusiness.mainBusiness,
+                stock.companyInsight.accountingBusiness.summary,
+                stock.companyInsight.newsSensitivity.summary,
+            )
+        )[:8]
+        stock_concepts[stock.symbol] = concepts
+        for concept in concepts:
+            concept_groups.setdefault(concept, []).append(stock)
+
+    industry_hotspots = [
+        build_cluster_hotspot(name, "industry", members, "自选池行业联动")
+        for name, members in industry_groups.items()
+        if len(members) >= 1
+    ]
+    concept_hotspots = [
+        build_cluster_hotspot(name, "concept", members, "自选池概念联动")
+        for name, members in concept_groups.items()
+        if len(members) >= 2
+    ]
+
+    industry_hotspots.sort(key=lambda item: (item.changePct, item.riseCount, item.leaderChangePct), reverse=True)
+    concept_hotspots.sort(key=lambda item: (item.changePct, item.riseCount, item.leaderChangePct), reverse=True)
+
+    for index, item in enumerate(industry_hotspots, start=1):
+        item.rank = index
+    for index, item in enumerate(concept_hotspots, start=1):
+        item.rank = index
+
+    return industry_hotspots, concept_hotspots, stock_concepts
+
+
+def build_global_etf_hotspots(etf_frame: pd.DataFrame) -> list[ThemeHotspot]:
+    if etf_frame.empty:
+        return []
+
+    pool = etf_frame.copy()
+    if "类型" in pool.columns:
+        pool = pool[~pool["类型"].astype(str).str.contains("固收|债|货币", na=False)]
+    if pool.empty:
+        return []
+
+    ranked = pool.sort_values(by="增长率数值", ascending=False).head(MAX_GLOBAL_ETFS)
+    hotspots = []
+    for rank, (_, row) in enumerate(ranked.iterrows(), start=1):
+        hotspots.append(
+            ThemeHotspot(
+                boardType="etf",
+                name=normalize_label(row.get("基金简称", "")),
+                code=str(row.get("基金代码", "")),
+                rank=rank,
+                changePct=round(normalize_float(row.get("增长率数值")), 2),
+                riseCount=0,
+                fallCount=0,
+                leaderName="",
+                leaderCode="",
+                leaderChangePct=0.0,
+                matchReason="ETF 日涨幅",
+            )
+        )
+    return hotspots
+
+
+def build_related_etf_hotspots(stock: WatchStock, hot_boards: list[ThemeHotspot], etf_frame: pd.DataFrame) -> list[ThemeHotspot]:
+    if etf_frame.empty:
+        return []
+
+    eligible_etfs = etf_frame.copy()
+    if "类型" in eligible_etfs.columns:
+        eligible_etfs = eligible_etfs[~eligible_etfs["类型"].astype(str).str.contains("固收|债|货币|国债|地债", na=False)]
+    if eligible_etfs.empty:
+        return []
+
+    search_terms = unique_in_order(
+        [
+            *[board.name for board in hot_boards],
+            stock.companyInsight.officialBusiness.industry,
+            *extract_actionable_theme_keywords(
+                stock.name,
+                stock.sector,
+                stock.companyInsight.officialBusiness.industry,
+                stock.companyInsight.officialBusiness.mainBusiness,
+                stock.companyInsight.accountingBusiness.summary,
+                stock.companyInsight.newsSensitivity.summary,
+            ),
+        ]
+    )
+    search_terms = [term for term in search_terms if len(term) >= 2]
+    if not search_terms:
+        return []
+
+    matches: list[ThemeHotspot] = []
+    for _, row in eligible_etfs.iterrows():
+        etf_name = normalize_label(row.get("基金简称", ""))
+        matched_term = next((term for term in search_terms if term in etf_name), "")
+        if not matched_term:
+            continue
+        matches.append(
+            ThemeHotspot(
+                boardType="etf",
+                name=etf_name,
+                code=str(row.get("基金代码", "")),
+                rank=0,
+                changePct=round(normalize_float(row.get("增长率数值")), 2),
+                riseCount=0,
+                fallCount=0,
+                leaderName="",
+                leaderCode="",
+                leaderChangePct=0.0,
+                matchReason=f"ETF 主题匹配：{matched_term}",
+            )
+        )
+
+    matches.sort(key=lambda item: item.changePct, reverse=True)
+    deduped: list[ThemeHotspot] = []
+    seen: set[tuple[str, str]] = set()
+    for item in matches:
+        key = (item.name, item.code)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped[:MAX_STOCK_ETFS]
+
+
+def parse_legu_activity_snapshot() -> dict[str, object]:
+    try:
+        frame = ak.stock_market_activity_legu()
+    except Exception as exc:
+        raise RuntimeError(f"legu activity fetch failed: {exc}") from exc
+
+    result: dict[str, object] = {}
+    for _, row in frame.iterrows():
+        item = normalize_label(row.get("item"))
+        if not item:
+            continue
+        result[item] = row.get("value")
+    return result
+
+
+def build_market_breadth_summary(
+    points: list[MarketBreadthPoint],
+    latest: MarketBreadthPoint,
+) -> tuple[str, str, str, int, int]:
+    if not points:
+        return "neutral", "鏆傛棤甯傚満瀹藉害鏍锋湰", "鏆傛棤涓婃定/涓嬭穼瀹舵暟鏇茬嚎", 0, 0
+
+    net_values = [point.netAdvance for point in points]
+    breadth_low = min(net_values)
+    breadth_high = max(net_values)
+    latest_net = latest.netAdvance
+    first_net = points[0].netAdvance
+    low_index = min(range(len(points)), key=lambda index: points[index].netAdvance)
+    recovery = latest_net - breadth_low
+
+    if latest_net <= -1800 and low_index == len(points) - 1:
+        return (
+            "negative",
+            "鍐扮偣鎵╂暎",
+            f"褰撳墠鍑€瀹舵暟 {latest_net:+d}锛屼笅璺屽鏁颁粛鍦ㄧ户缁墿澶э紝鍏堢瓑鍐扮偣绋冲畾銆?",
+            breadth_low,
+            breadth_high,
+        )
+
+    if recovery >= 900 and latest_net - first_net >= 600 and low_index <= max(len(points) - 4, 0):
+        return (
+            "positive",
+            "鍐扮偣淇",
+            f"鏃ュ唴浠庢渶浣庡噣瀹舵暟 {breadth_low:+d} 淇鑷? {latest_net:+d}锛屼笂娑ㄥ鏁板洖鍗囷紝鍙暀鎰忓啺鐐瑰弽杞満浼氥€?",
+            breadth_low,
+            breadth_high,
+        )
+
+    if latest_net >= 500 and latest_net - first_net >= 300:
+        return (
+            "positive",
+            "鏅定鎵╂暎",
+            f"鍑€瀹舵暟鍥炲崌鑷? {latest_net:+d}锛屼笂娑ㄥ鏁版鍦ㄦ墿鏁ｏ紝鐜鍋忓洖鏆栥€?",
+            breadth_low,
+            breadth_high,
+        )
+
+    if latest_net <= -800:
+        return (
+            "alert",
+            "鍐扮偣鍖洪棿",
+            f"鍑€瀹舵暟浠嶅湪 {latest_net:+d} 浣庝綅闄勮繎锛屽彲浠ュ叧娉ㄦ槸鍚﹀嚭鐜扮涓€娆℃湁鏁堝洖鍗囥€?",
+            breadth_low,
+            breadth_high,
+        )
+
+    return (
+        "neutral",
+        "鍒嗗寲闇囪崱",
+        f"褰撳墠鍑€瀹舵暟 {latest_net:+d}锛屼笂涓嬪鏁扮粨鏋勪粛鍦ㄦ媺鎵紝鍏堢户缁瀵熻浆寮哄埡婵€銆?",
+        breadth_low,
+        breadth_high,
+    )
+
+
+def fetch_market_breadth_profile() -> MarketBreadthProfile:
+    cached_payload = load_json_cache(MARKET_BREADTH_CACHE_PATH)
+    cached_profile = market_breadth_from_dict(cached_payload.get("data", {})) if cached_payload else default_market_breadth()
+    if cached_payload and is_cache_fresh(cached_payload, MARKET_BREADTH_CACHE_TTL_SECONDS) and cached_profile.trendPoints:
+        return cached_profile
+
+    snapshot_payload = load_snapshot_payload()
+    snapshot_breadth = market_breadth_from_dict(
+        (snapshot_payload.get("marketRadar", {}) or {}).get("marketBreadth", {})
+    )
+
+    try:
+        response = requests.get(
+            "https://legulegu.com/stockdata/market-activity-trend-data",
+            headers=LEGU_HEADERS,
+            timeout=20,
+        )
+        response.raise_for_status()
+        raw_points = response.json()
+        if not isinstance(raw_points, list) or not raw_points:
+            raise RuntimeError("market breadth trend payload is empty")
+
+        points: list[MarketBreadthPoint] = []
+        for item in raw_points:
+            if not isinstance(item, dict):
+                continue
+            trade_time = datetime.fromtimestamp(normalize_float(item.get("date")) / 1000)
+            total_up = normalize_int(item.get("totalUp"), 0)
+            total_down = normalize_int(item.get("totalDown"), 0)
+            flat_count = normalize_int(item.get("priceStop"), 0)
+            points.append(
+                MarketBreadthPoint(
+                    timestamp=trade_time.strftime("%H:%M"),
+                    totalUp=total_up,
+                    totalDown=total_down,
+                    limitUp=normalize_int(item.get("limitUp"), 0),
+                    limitDown=normalize_int(item.get("limitDown"), 0),
+                    flatCount=flat_count,
+                    netAdvance=total_up - total_down,
+                )
+            )
+
+        if not points:
+            raise RuntimeError("market breadth points are empty")
+
+        points.sort(key=lambda item: item.timestamp)
+        latest = points[-1]
+        activity_map = parse_legu_activity_snapshot()
+        activity_pct = round(normalize_float(activity_map.get("娲昏穬搴?"), 0.0), 2)
+        trade_date = datetime.fromtimestamp(normalize_float(raw_points[-1].get("date")) / 1000).strftime("%Y-%m-%d")
+        tone, signal_label, summary, breadth_low, breadth_high = build_market_breadth_summary(points, latest)
+        advance_decline_ratio = round(latest.totalUp / max(latest.totalDown, 1), 2)
+
+        profile = MarketBreadthProfile(
+            updatedAt=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            tradeDate=trade_date,
+            activityPct=activity_pct,
+            upCount=normalize_int(activity_map.get("涓婃定"), latest.totalUp),
+            downCount=normalize_int(activity_map.get("涓嬭穼"), latest.totalDown),
+            flatCount=normalize_int(activity_map.get("骞崇洏"), latest.flatCount),
+            limitUpCount=normalize_int(activity_map.get("娑ㄥ仠"), latest.limitUp),
+            limitDownCount=normalize_int(activity_map.get("璺屽仠"), latest.limitDown),
+            netAdvance=latest.netAdvance,
+            advanceDeclineRatio=advance_decline_ratio,
+            breadthLow=breadth_low,
+            breadthHigh=breadth_high,
+            tone=tone,
+            signalLabel=signal_label,
+            summary=summary,
+            trendPoints=points,
+        )
+        write_json_cache(MARKET_BREADTH_CACHE_PATH, {"fetchedAt": now_iso(), "data": asdict(profile)})
+        return profile
+    except Exception as exc:
+        print(f"Warning: failed to fetch market breadth profile: {exc}")
+
+    if cached_profile.trendPoints:
+        return cached_profile
+    if snapshot_breadth.trendPoints:
+        return snapshot_breadth
+    return default_market_breadth()
+
+
+def enrich_market_radar(stocks: list[WatchStock]) -> MarketRadar:
+    industry_hotspots, concept_hotspots, stock_concepts = build_watchlist_cluster_hotspots(stocks)
+
+    etf_frame = fetch_etf_daily_frame()
+    global_etfs = build_global_etf_hotspots(etf_frame)
+    hottest_boards = sorted(
+        (industry_hotspots[:4] + concept_hotspots[:4]),
+        key=lambda item: (item.changePct, -item.rank),
+        reverse=True,
+    )[:MAX_GLOBAL_BOARDS]
+
+    for stock in stocks:
+        stock_industry = normalize_text_block(stock.companyInsight.officialBusiness.industry or stock.sector)
+        matched_hot_boards = [
+            item for item in industry_hotspots
+            if item.name == stock_industry
+        ]
+        matched_hot_boards.extend(
+            item for item in concept_hotspots
+            if item.name in stock_concepts.get(stock.symbol, [])
+        )
+        matched_hot_boards = sorted(matched_hot_boards, key=lambda item: (item.changePct, item.riseCount, item.leaderChangePct), reverse=True)[:MAX_STOCK_HOT_BOARDS]
+        industry_name = next((item.name for item in matched_hot_boards if item.boardType == "industry"), "")
+        if not industry_name:
+            industry_name = normalize_text_block(stock.companyInsight.officialBusiness.industry or stock.sector)
+        concepts = unique_in_order([item.name for item in matched_hot_boards if item.boardType == "concept"]) or stock_concepts.get(stock.symbol, [])
+        matched_keywords = unique_in_order(
+            extract_actionable_theme_keywords(
+                stock.name,
+                stock.sector,
+                industry_name,
+                stock.companyInsight.officialBusiness.mainBusiness,
+                stock.companyInsight.accountingBusiness.summary,
+                " ".join(concepts),
+            )
+        )[:8]
+        related_etfs = build_related_etf_hotspots(stock, matched_hot_boards, etf_frame)
+        stock.themeLinkage = StockThemeLinkage(
+            updatedAt=datetime.now().strftime("%Y-%m-%d %H:%M"),
+            industry=industry_name,
+            concepts=concepts[:6],
+            matchedKeywords=matched_keywords,
+            hotBoards=matched_hot_boards,
+            relatedEtfs=related_etfs,
+            summary=build_stock_theme_summary(matched_hot_boards, related_etfs),
+        )
+
+    return MarketRadar(
+        updatedAt=datetime.now().strftime("%Y-%m-%d %H:%M"),
+        hottestBoards=hottest_boards,
+        hottestEtfs=global_etfs,
+        usMarketPulse=build_us_market_pulse(),
+        marketBreadth=fetch_market_breadth_profile(),
+    )
+
+
 def fetch_market_cap_yi(symbol: str, current_price: float, fallback_market_cap_yi: float) -> float:
     cached_cap, cached_payload = load_cap_cache(symbol)
     if cached_cap is not None and is_cache_fresh(cached_payload, CAP_CACHE_TTL_SECONDS):
@@ -1465,6 +2765,91 @@ def fetch_market_cap_yi(symbol: str, current_price: float, fallback_market_cap_y
     return fallback_market_cap_yi
 
 
+def fetch_hist_with_baostock(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    bs_symbol = baostock_symbol(symbol)
+    if not bs_symbol:
+        return pd.DataFrame()
+
+    start_label = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}"
+    end_label = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+    last_error: Exception | None = None
+
+    for attempt in range(1, 4):
+        try:
+            ensure_baostock_login()
+            result = bs.query_history_k_data_plus(
+                bs_symbol,
+                BAOSTOCK_DAILY_FIELDS,
+                start_date=start_label,
+                end_date=end_label,
+                frequency="d",
+                adjustflag="2",
+            )
+            if result.error_code != "0":
+                raise RuntimeError(f"baostock history query failed: {result.error_code} {result.error_msg}")
+
+            rows: list[list[str]] = []
+            while result.error_code == "0" and result.next():
+                rows.append(result.get_row_data())
+
+            if not rows:
+                return pd.DataFrame()
+
+            return pd.DataFrame(rows, columns=result.fields)
+        except Exception as exc:
+            last_error = exc
+            logout_baostock()
+            if attempt < 3:
+                time.sleep(0.5 * attempt)
+
+    raise last_error or RuntimeError("baostock history query failed")
+
+
+def fetch_chip_hist_with_baostock(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    bs_symbol = baostock_symbol(symbol)
+    if not bs_symbol:
+        return pd.DataFrame()
+
+    start_label = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}"
+    end_label = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+    last_error: Exception | None = None
+
+    for attempt in range(1, 4):
+        try:
+            ensure_baostock_login()
+            result = bs.query_history_k_data_plus(
+                bs_symbol,
+                BAOSTOCK_CHIP_FIELDS,
+                start_date=start_label,
+                end_date=end_label,
+                frequency="d",
+                adjustflag="3",
+            )
+            if result.error_code != "0":
+                raise RuntimeError(f"baostock chip query failed: {result.error_code} {result.error_msg}")
+
+            rows: list[list[str]] = []
+            while result.error_code == "0" and result.next():
+                rows.append(result.get_row_data())
+
+            if not rows:
+                return pd.DataFrame()
+
+            frame = pd.DataFrame(rows, columns=result.fields)
+            numeric_columns = ["close", "preclose", "volume", "amount", "turn"]
+            for column in numeric_columns:
+                if column in frame.columns:
+                    frame[column] = pd.to_numeric(frame[column], errors="coerce")
+            return frame
+        except Exception as exc:
+            last_error = exc
+            logout_baostock()
+            if attempt < 3:
+                time.sleep(0.5 * attempt)
+
+    raise last_error or RuntimeError("baostock chip query failed")
+
+
 def fetch_hist(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     cached_df, cached_payload = load_hist_cache(symbol)
     if not cached_df.empty and is_hist_cache_fresh(cached_payload, start_date, end_date):
@@ -1475,6 +2860,7 @@ def fetch_hist(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
     alt_symbol = f"{market_prefix}{symbol}"
 
     fetchers = [
+        ("baostock", lambda: fetch_hist_with_baostock(symbol, start_date, end_date)),
         ("stock_zh_a_daily", lambda: ak.stock_zh_a_daily(
             symbol=alt_symbol,
             adjust="qfq",
@@ -1519,18 +2905,33 @@ def fetch_hist(symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
 
     normalized = hist_df.copy()
     column_map = {}
+    if "date" in normalized.columns and "日期" not in normalized.columns:
+        column_map["date"] = "日期"
+    if "open" in normalized.columns and "开盘" not in normalized.columns:
+        column_map["open"] = "开盘"
     if "close" in normalized.columns and C_CLOSE not in normalized.columns:
         column_map["close"] = C_CLOSE
     if "high" in normalized.columns and C_HIGH not in normalized.columns:
         column_map["high"] = C_HIGH
     if "low" in normalized.columns and C_LOW not in normalized.columns:
         column_map["low"] = C_LOW
-    if "amount" in normalized.columns and C_VOLUME not in normalized.columns:
+    if "volume" in normalized.columns and C_VOLUME not in normalized.columns:
+        column_map["volume"] = C_VOLUME
+    if "amount" in normalized.columns and "volume" not in normalized.columns and C_VOLUME not in normalized.columns:
         column_map["amount"] = C_VOLUME
+    if "pctChg" in normalized.columns and C_CHANGE not in normalized.columns:
+        column_map["pctChg"] = C_CHANGE
     if column_map:
         normalized = normalized.rename(columns=column_map)
 
+    if "date" not in normalized.columns and "日期" in normalized.columns:
+        normalized["date"] = normalized["日期"].astype(str)
+    elif "日期" not in normalized.columns and "date" in normalized.columns:
+        normalized["日期"] = normalized["date"].astype(str)
+
     normalized[C_CLOSE] = pd.to_numeric(normalized.get(C_CLOSE), errors="coerce")
+    if "开盘" in normalized.columns:
+        normalized["开盘"] = pd.to_numeric(normalized["开盘"], errors="coerce")
     if C_HIGH in normalized.columns:
         normalized[C_HIGH] = pd.to_numeric(normalized[C_HIGH], errors="coerce")
     if C_LOW in normalized.columns:
@@ -1567,6 +2968,22 @@ def clamp(value: float, low: float, high: float) -> float:
 
 def is_growth_board(symbol: str) -> bool:
     return symbol.startswith(("300", "301", "688"))
+
+
+def price_limit_ratio(symbol: str) -> float:
+    if symbol.startswith(("300", "301", "688")):
+        return 0.20
+    if symbol.startswith(("430", "830", "831", "832", "833", "835", "836", "837", "838", "839", "870", "871", "872", "873", "874", "875", "876", "877", "878", "879")):
+        return 0.30
+    return 0.10
+
+
+def is_limit_up_close(symbol: str, row: pd.Series, close_value: float, high_value: float) -> bool:
+    limit_ratio = price_limit_ratio(symbol)
+    pct_value = to_float(row.get(C_CHANGE, row.get("pctChg", 0.0)), 0.0)
+    if pct_value < limit_ratio * 100 - 0.35:
+        return False
+    return abs(close_value - high_value) <= max(0.01, close_value * 0.0012)
 
 
 def resolve_amplitude_template(symbol: str, market_cap_yi: float) -> tuple[str, str, float, list[float]]:
@@ -1777,6 +3194,471 @@ def build_technical_indicators(close_series: list[float]) -> TechnicalIndicators
     return TechnicalIndicators(
         macd=build_macd_indicator(close_series),
         rsi14=build_rsi_indicator(close_series),
+    )
+
+
+def build_bollinger_profile(hist_df: pd.DataFrame, period: int = 30, std_multiplier: float = 2.0) -> BollingerProfile:
+    if hist_df.empty or C_CLOSE not in hist_df.columns:
+        return default_bollinger()
+
+    close_series = pd.to_numeric(hist_df[C_CLOSE], errors="coerce")
+    rolling_mean = close_series.rolling(window=period).mean()
+    rolling_std = close_series.rolling(window=period).std(ddof=0)
+    frame = pd.DataFrame({
+        "date": hist_df.get("日期", hist_df.index),
+        "middle": rolling_mean,
+        "upper": rolling_mean + rolling_std * std_multiplier,
+        "lower": rolling_mean - rolling_std * std_multiplier,
+    }).dropna().tail(12)
+
+    points = [
+        BollingerPoint(
+            date=str(row["date"])[:10],
+            middle=round(float(row["middle"]), 2),
+            upper=round(float(row["upper"]), 2),
+            lower=round(float(row["lower"]), 2),
+        )
+        for _, row in frame.iterrows()
+    ]
+    return BollingerProfile(period=period, stdMultiplier=std_multiplier, points=points)
+
+
+def build_recent_candles(symbol: str, hist_df: pd.DataFrame) -> list[CandlePoint]:
+    candles: list[CandlePoint] = []
+    if hist_df.empty:
+        return candles
+
+    for _, row in hist_df.iterrows():
+        close_value = round(to_float(row.get(C_CLOSE, row.get("close", 0.0)), 0.0), 2)
+        open_value = round(to_float(row.get("开盘", row.get("open", close_value)), close_value), 2)
+        high_value = round(to_float(row.get(C_HIGH, row.get("high", close_value)), close_value), 2)
+        low_value = round(to_float(row.get(C_LOW, row.get("low", close_value)), close_value), 2)
+        normalized_high = max(high_value, open_value, close_value)
+        normalized_low = min(low_value, open_value, close_value)
+        candles.append(
+            CandlePoint(
+                date=normalize_text_block(row.get("日期", row.get("date", "")))[:10],
+                open=open_value,
+                high=normalized_high,
+                low=normalized_low,
+                close=close_value,
+                isLimitUpClose=is_limit_up_close(symbol, row, close_value, normalized_high),
+            )
+        )
+
+    return candles
+
+
+def build_limit_up_signal_profile(symbol: str, hist_df: pd.DataFrame, current_price: float) -> LimitUpSignalProfile:
+    if hist_df.empty:
+        return default_limit_up_signal()
+
+    recent_frame = hist_df.tail(10).copy()
+    recent_count_10 = 0
+    candidates: list[LimitUpSignalProfile] = []
+
+    for position, (_, row) in enumerate(recent_frame.iterrows()):
+        close_value = round(to_float(row.get(C_CLOSE, row.get("close", 0.0)), 0.0), 2)
+        open_value = round(to_float(row.get("开盘", row.get("open", close_value)), close_value), 2)
+        high_value = round(to_float(row.get(C_HIGH, row.get("high", close_value)), close_value), 2)
+        normalized_high = max(high_value, open_value, close_value)
+        is_limit_up = is_limit_up_close(symbol, row, close_value, normalized_high)
+        if not is_limit_up:
+            continue
+
+        if position >= len(recent_frame) - 10:
+            recent_count_10 += 1
+
+        future = recent_frame.iloc[position + 1 :]
+        if future.empty:
+            continue
+        future_closes = pd.to_numeric(future[C_CLOSE], errors="coerce").dropna()
+        if future_closes.empty or float(future_closes.min()) < open_value:
+            continue
+
+        anchor_date = normalize_text_block(row.get("日期", row.get("date", "")))[:10]
+        hold_days = len(future)
+        current_bias_pct = ((current_price / open_value) - 1) * 100 if open_value else 0.0
+        candidates.append(
+            LimitUpSignalProfile(
+                recentLimitUpCount10=recent_count_10,
+                isHoldingAboveOpen=True,
+                anchorDate=anchor_date,
+                anchorOpen=open_value,
+                anchorClose=close_value,
+                holdDays=hold_days,
+                currentBiasPct=round(current_bias_pct, 2),
+                tone="alert" if hold_days >= 3 else "positive",
+                summary=(
+                    f"自 {anchor_date} 涨停以来，后续收盘始终未跌破当日开盘价 {open_value:.2f}。"
+                    f"已保持 {hold_days} 个交易日，当前仍高于该位置 {current_bias_pct:+.1f}%。"
+                ),
+            )
+        )
+
+    if candidates:
+        strongest = max(candidates, key=lambda item: (item.holdDays, item.currentBiasPct, item.anchorDate))
+        strongest.recentLimitUpCount10 = recent_count_10
+        return strongest
+
+    signal = default_limit_up_signal()
+    signal.recentLimitUpCount10 = recent_count_10
+    if recent_count_10 > 0:
+        signal.summary = f"近 10 日出现 {recent_count_10} 次涨停，但守开条件未成立。"
+    return signal
+
+
+def bucket_price(value: float, bucket_size: float) -> float:
+    if bucket_size <= 0:
+        return round(value, 2)
+    return round(round(value / bucket_size) * bucket_size, 2)
+
+
+def weighted_price_quantile(bands: list[tuple[float, float]], quantile: float) -> float:
+    if not bands:
+        return 0.0
+
+    target = max(0.0, min(1.0, quantile))
+    cumulative = 0.0
+    for price, ratio in bands:
+        cumulative += ratio
+        if cumulative >= target:
+            return round(price, 2)
+    return round(bands[-1][0], 2)
+
+
+def turnover_weighted_cost_line(frame: pd.DataFrame, window: int | None = None) -> float:
+    scoped = frame.tail(window) if window else frame
+    scoped = scoped.dropna(subset=["adj_avg_price", "turnover"])
+    if scoped.empty:
+        return 0.0
+
+    weights = scoped["turnover"].clip(lower=0.0001)
+    total_weight = float(weights.sum())
+    if total_weight <= 0:
+        return round(float(scoped["adj_avg_price"].mean()), 2)
+
+    return round(float((scoped["adj_avg_price"] * weights).sum() / total_weight), 2)
+
+
+def find_significant_chip_peaks(
+    bands: list[tuple[float, float]],
+    dominant_ratio: float,
+) -> list[tuple[int, float, float]]:
+    if not bands:
+        return []
+
+    threshold = max(0.02, dominant_ratio * 0.45)
+    peaks: list[tuple[int, float, float]] = []
+    for index, (price, ratio) in enumerate(bands):
+        left_ratio = bands[index - 1][1] if index > 0 else -1.0
+        right_ratio = bands[index + 1][1] if index + 1 < len(bands) else -1.0
+        if ratio >= left_ratio and ratio >= right_ratio and ratio >= threshold:
+            peaks.append((index, price, ratio))
+
+    if peaks:
+        return peaks
+
+    dominant_index = max(range(len(bands)), key=lambda item: bands[item][1])
+    dominant_price, dominant_peak_ratio = bands[dominant_index]
+    return [(dominant_index, dominant_price, dominant_peak_ratio)]
+
+
+def resolve_main_cost_zone(
+    bands: list[tuple[float, float]],
+    dominant_index: int,
+    dominant_ratio: float,
+    dominant_price: float,
+) -> tuple[float, float, float]:
+    if not bands:
+        return 0.0, 0.0, 0.0
+
+    threshold = max(0.015, dominant_ratio * 0.35)
+    start = dominant_index
+    end = dominant_index
+
+    while start > 0 and bands[start - 1][1] >= threshold:
+        start -= 1
+    while end + 1 < len(bands) and bands[end + 1][1] >= threshold:
+        end += 1
+
+    zone_low = round(bands[start][0], 2)
+    zone_high = round(bands[end][0], 2)
+    zone_width_pct = round((((zone_high - zone_low) / dominant_price) * 100) if dominant_price else 0.0, 2)
+    return zone_low, zone_high, zone_width_pct
+
+
+def resolve_chip_shape(
+    peaks: list[tuple[int, float, float]],
+    low_90: float,
+    high_90: float,
+    zone_low: float,
+    zone_high: float,
+    zone_width_pct: float,
+    current_price: float,
+    dominant_price: float,
+    winner_ratio: float,
+    bucket_size: float,
+) -> tuple[str, str, str, str]:
+    span = max(high_90 - low_90, bucket_size)
+    zone_mid = (zone_low + zone_high) / 2 if zone_high or zone_low else dominant_price
+    zone_position = ((zone_mid - low_90) / span) if span else 0.5
+    peak_span = abs(peaks[-1][1] - peaks[0][1]) if len(peaks) >= 2 else 0.0
+
+    if len(peaks) >= 2 and peak_span >= max(bucket_size * 6, dominant_price * 0.08):
+        return "双峰结构", "双峰博弈", "上下成本峰同时存在，先等方向选择", "neutral"
+    if current_price >= zone_high * 1.08 and winner_ratio >= 0.68:
+        return "向上发散", "拉升展开", "已经脱离主力成本区，趋势在走，但不宜追高", "positive"
+    if current_price <= zone_low * 0.92 and winner_ratio <= 0.35:
+        return "向下发散", "下行出清", "价格落在主力成本区下方，筹码承压明显", "negative"
+    if zone_width_pct <= 12 and zone_position <= 0.35:
+        return "低位密集", "吸筹蓄势", "低位换手较充分，等待放量确认", "positive"
+    if zone_width_pct <= 12 and zone_position >= 0.65:
+        return "高位密集", "高位博弈", "高位筹码堆积，优先防派发风险", "alert"
+    if zone_width_pct <= 18:
+        return "筹码密集", "震荡换手", "筹码集中但方向未完全展开，继续观察", "neutral"
+    return "宽幅发散", "筹码分散", "持仓成本差异较大，控盘轮廓不够清晰", "neutral"
+
+
+def build_chip_control_evidence(
+    normalized: pd.DataFrame,
+    current_price: float,
+    winner_ratio: float,
+    zone_low: float,
+    zone_high: float,
+    zone_width_pct: float,
+    zone_position: float,
+) -> list[ChipControlEvidence]:
+    if normalized.empty:
+        return []
+
+    latest_turnover = float(normalized["turnover"].iloc[-1])
+    recent_turnover = float(normalized["turnover"].tail(3).mean())
+    recent_min_close = float(normalized["close"].tail(6).min())
+    cyc5 = turnover_weighted_cost_line(normalized, 5)
+    cyc13 = turnover_weighted_cost_line(normalized, 13)
+    cyc34 = turnover_weighted_cost_line(normalized, 34)
+
+    if zone_low <= current_price <= zone_high:
+        zone_tone = "positive"
+        zone_value = "处于成本区内"
+        zone_summary = "当前价格仍在主力成本区内部，博弈重心没有明显失控。"
+    elif current_price > zone_high:
+        premium_pct = ((current_price / zone_high) - 1) * 100 if zone_high else 0.0
+        zone_tone = "alert" if premium_pct >= 12 else "neutral"
+        zone_value = f"高于成本区 {premium_pct:.1f}%"
+        zone_summary = "价格已运行到主力成本区上方，越远越要防追高。"
+    else:
+        discount_pct = (1 - (current_price / zone_low)) * 100 if zone_low else 0.0
+        zone_tone = "negative" if discount_pct >= 5 else "neutral"
+        zone_value = f"低于成本区 {discount_pct:.1f}%"
+        zone_summary = "价格回到主力成本区下方，说明上方筹码存在明显压力。"
+
+    if winner_ratio >= 0.9 and latest_turnover <= 0.03:
+        winner_tone = "positive"
+        winner_summary = "满足 90 比 3，获利盘高而换手低，筹码锁定较好。"
+    elif winner_ratio >= 0.75 and latest_turnover <= 0.05:
+        winner_tone = "neutral"
+        winner_summary = "接近 90 比 3，说明持股者总体占优，但锁定程度还不够强。"
+    else:
+        winner_tone = "negative"
+        winner_summary = "未达到 90 比 3，当前筹码锁定性一般。"
+
+    breakout_ready = current_price > zone_high * 1.01 and recent_min_close <= zone_high * 1.01
+    if breakout_ready and recent_turnover <= 0.03:
+        breakout_tone = "positive"
+        breakout_value = f"近 3 日换手 {recent_turnover * 100:.2f}%"
+        breakout_summary = "股价刚脱离密集区且换手偏低，接近无量上穿密集区。"
+    elif breakout_ready and recent_turnover >= 0.06:
+        breakout_tone = "alert"
+        breakout_value = f"近 3 日换手 {recent_turnover * 100:.2f}%"
+        breakout_summary = "虽然价格站上密集区，但换手偏大，更像放量冲关，追高要谨慎。"
+    else:
+        breakout_tone = "neutral"
+        breakout_value = f"近 3 日换手 {recent_turnover * 100:.2f}%"
+        breakout_summary = "暂未出现典型的无量上穿密集区结构。"
+
+    low_lock_ready = zone_position <= 0.35 and zone_width_pct <= 12 and current_price <= zone_high * 1.05 and winner_ratio >= 0.75
+    if low_lock_ready:
+        lock_tone = "positive"
+        lock_value = f"区宽 {zone_width_pct:.1f}%"
+        lock_summary = "主力成本区位于低位且分布较窄，接近低位锁定。"
+    elif zone_position >= 0.65 and zone_width_pct <= 12:
+        lock_tone = "alert"
+        lock_value = f"区宽 {zone_width_pct:.1f}%"
+        lock_summary = "筹码虽然集中，但位置偏高，更像高位锁定博弈。"
+    else:
+        lock_tone = "neutral"
+        lock_value = f"区宽 {zone_width_pct:.1f}%"
+        lock_summary = "锁定结构不典型，继续观察筹码是否进一步收敛。"
+
+    if cyc5 > cyc13 > cyc34 and cyc34 > 0 and ((cyc5 / cyc34) - 1) >= 0.05:
+        cost_tone = "positive"
+        cost_value = "成本均线发散"
+        cost_summary = f"CYC5/13/34 约为 {cyc5:.2f}/{cyc13:.2f}/{cyc34:.2f}，短中期成本抬升明显。"
+    elif cyc5 < cyc13 < cyc34 and cyc5 > 0:
+        cost_tone = "negative"
+        cost_value = "成本均线走弱"
+        cost_summary = f"CYC5/13/34 约为 {cyc5:.2f}/{cyc13:.2f}/{cyc34:.2f}，成本结构偏空。"
+    else:
+        cost_tone = "neutral"
+        cost_value = "成本均线缠绕"
+        cost_summary = f"CYC5/13/34 约为 {cyc5:.2f}/{cyc13:.2f}/{cyc34:.2f}，主力方向仍需确认。"
+
+    return [
+        ChipControlEvidence("cost_zone", "成本区位置", zone_value, zone_tone, zone_summary),
+        ChipControlEvidence("winner_lock", "90比3", f"获利 {winner_ratio * 100:.1f}% / 换手 {latest_turnover * 100:.2f}%", winner_tone, winner_summary),
+        ChipControlEvidence("low_lock", "低位锁定", lock_value, lock_tone, lock_summary),
+        ChipControlEvidence("breakout", "无量上穿密集区", breakout_value, breakout_tone, breakout_summary),
+        ChipControlEvidence("cost_lines", "成本均线", cost_value, cost_tone, cost_summary),
+    ]
+
+
+def build_chip_distribution_profile(
+    symbol: str,
+    start_date: str,
+    end_date: str,
+    current_price: float,
+    fallback_profile: ChipDistributionProfile | None = None,
+) -> ChipDistributionProfile:
+    try:
+        frame = fetch_chip_hist_with_baostock(symbol, start_date, end_date)
+    except Exception as exc:
+        print(f"Warning: failed to fetch chip history for {symbol}: {exc}")
+        return fallback_profile or default_chip_distribution(current_price)
+
+    required_columns = {"date", "close", "preclose", "volume", "amount", "turn"}
+    if frame.empty or not required_columns.issubset(frame.columns):
+        return fallback_profile or default_chip_distribution(current_price)
+
+    normalized = frame.copy()
+    normalized["date"] = normalized["date"].astype(str)
+    normalized = normalized.replace([np.inf, -np.inf], np.nan)
+    normalized = normalized.dropna(subset=["date", "close", "preclose", "volume", "amount", "turn"])
+    normalized = normalized[
+        (normalized["close"] > 0) &
+        (normalized["preclose"] > 0) &
+        (normalized["volume"] > 0) &
+        (normalized["amount"] > 0)
+    ].copy()
+    if normalized.empty:
+        return fallback_profile or default_chip_distribution(current_price)
+
+    normalized["pct_change"] = normalized["close"] / normalized["preclose"] - 1
+    normalized["adj_factor"] = (1 + normalized["pct_change"]).cumprod()
+    first_close = to_float(normalized.iloc[0]["close"], 0.0)
+    first_factor = to_float(normalized.iloc[0]["adj_factor"], 1.0) or 1.0
+    normalized["adj_close"] = normalized["adj_factor"] * (first_close / first_factor)
+    normalized["avg_price"] = normalized["amount"] / normalized["volume"]
+    normalized["adj_avg_price"] = normalized["adj_close"] * normalized["avg_price"] / normalized["close"]
+    normalized["turnover"] = (normalized["turn"] / 100).clip(lower=0.0, upper=1.0)
+
+    bucket_size = 0.2 if current_price >= 100 else 0.1
+    chips: dict[float, float] = {}
+    initial_price = bucket_price(to_float(normalized.iloc[0]["preclose"], current_price), bucket_size)
+    chips[initial_price] = 1.0
+
+    for row in normalized.itertuples(index=False):
+        target_price = bucket_price(to_float(getattr(row, "adj_avg_price", 0.0), current_price), bucket_size)
+        turnover = max(0.0, min(1.0, to_float(getattr(row, "turnover", 0.0), 0.0)))
+        decay = 1.0 - turnover
+        next_chips = {
+            price: ratio * decay
+            for price, ratio in chips.items()
+            if ratio * decay >= 1e-6
+        }
+        next_chips[target_price] = next_chips.get(target_price, 0.0) + turnover
+        chips = next_chips
+
+    if not chips:
+        return fallback_profile or default_chip_distribution(current_price)
+
+    total_ratio = sum(chips.values())
+    if total_ratio <= 0:
+        return fallback_profile or default_chip_distribution(current_price)
+
+    normalized_bands = sorted(
+        ((price, ratio / total_ratio) for price, ratio in chips.items()),
+        key=lambda item: item[0],
+    )
+    bands = [
+        ChipDistributionBand(price=round(price, 2), ratio=round(ratio, 6))
+        for price, ratio in normalized_bands
+    ]
+    dominant_price, dominant_ratio = max(normalized_bands, key=lambda item: item[1])
+    average_cost = sum(price * ratio for price, ratio in normalized_bands)
+    winner_ratio = sum(ratio for price, ratio in normalized_bands if price <= current_price)
+    low_70 = weighted_price_quantile(normalized_bands, 0.15)
+    high_70 = weighted_price_quantile(normalized_bands, 0.85)
+    low_90 = weighted_price_quantile(normalized_bands, 0.05)
+    high_90 = weighted_price_quantile(normalized_bands, 0.95)
+    bias_pct = ((current_price / dominant_price) - 1) * 100 if dominant_price else 0.0
+    zone_low, zone_high, zone_width_pct = resolve_main_cost_zone(
+        normalized_bands,
+        max(range(len(normalized_bands)), key=lambda index: normalized_bands[index][1]),
+        dominant_ratio,
+        dominant_price,
+    )
+    zone_span = max(high_90 - low_90, bucket_size)
+    zone_position = (((zone_low + zone_high) / 2) - low_90) / zone_span if zone_span else 0.5
+    peaks = find_significant_chip_peaks(normalized_bands, dominant_ratio)
+    shape_label, stage_label, risk_label, shape_tone = resolve_chip_shape(
+        peaks,
+        low_90,
+        high_90,
+        zone_low,
+        zone_high,
+        zone_width_pct,
+        current_price,
+        dominant_price,
+        winner_ratio,
+        bucket_size,
+    )
+    control_evidence = build_chip_control_evidence(
+        normalized,
+        current_price,
+        winner_ratio,
+        zone_low,
+        zone_high,
+        zone_width_pct,
+        zone_position,
+    )
+
+    zone_state = "位于主力成本区内"
+    if current_price > zone_high:
+        zone_state = f"高于主力成本区 {((current_price / zone_high) - 1) * 100:.1f}%"
+    elif current_price < zone_low:
+        zone_state = f"低于主力成本区 {(1 - (current_price / zone_low)) * 100:.1f}%"
+
+    summary = (
+        f"{shape_label}，主力成本区 {zone_low:.2f}-{zone_high:.2f}，"
+        f"获利盘 {winner_ratio * 100:.1f}%，{zone_state}。{risk_label}"
+    )
+
+    return ChipDistributionProfile(
+        algorithm="turnover_decay_v1",
+        bucketSize=bucket_size,
+        sampleSize=int(len(normalized)),
+        tradeDate=str(normalized.iloc[-1]["date"])[:10],
+        mainCost=round(dominant_price, 2),
+        mainCostZoneLow=zone_low,
+        mainCostZoneHigh=zone_high,
+        mainCostZoneWidthPct=zone_width_pct,
+        averageCost=round(average_cost, 2),
+        winnerRatio=round(winner_ratio, 6),
+        dominantRatio=round(dominant_ratio, 6),
+        concentration70Low=low_70,
+        concentration70High=high_70,
+        concentration90Low=low_90,
+        concentration90High=high_90,
+        currentPriceBiasPct=round(bias_pct, 2),
+        shapeLabel=shape_label,
+        stageLabel=stage_label,
+        riskLabel=risk_label,
+        tone=shape_tone,
+        summary=summary,
+        controlEvidence=control_evidence,
+        bands=bands,
     )
 
 
@@ -2049,15 +3931,14 @@ def build_stock(
     index: int,
     manual_name_map: dict[str, str],
     name_map: dict[str, str],
-    spot_map: dict[str, dict],
     start_date: str,
     end_date: str,
     fallback_stock: WatchStock | None = None,
 ) -> WatchStock:
     hist_df = fetch_hist(code, start_date, end_date)
-    spot = spot_map.get(code, {})
     fallback_metadata = fallback_stock.metadata if fallback_stock else None
     fallback_company_insight = fallback_stock.companyInsight if fallback_stock else None
+    fallback_chip_distribution = fallback_stock.chipDistribution if fallback_stock else None
     fallback_market_cap_yi = (
         fallback_stock.amplitudeDistribution.marketCapYi
         if fallback_stock and getattr(fallback_stock, "amplitudeDistribution", None)
@@ -2065,23 +3946,61 @@ def build_stock(
     )
 
     if hist_df.empty:
-        price = round(float(spot.get(C_LATEST, 0) or 0), 2)
-        change_pct = round(float(spot.get(C_CHANGE, 0) or 0), 2)
-        sparkline = [price] * 8 if price else [0.0] * 8
+        fallback_price = fallback_stock.price if fallback_stock else 0.0
+        fallback_change_pct = fallback_stock.changePct if fallback_stock else 0.0
+        price = round(fallback_price, 2)
+        change_pct = round(fallback_change_pct, 2)
+        sparkline = (
+            fallback_stock.sparkline[-8:]
+            if fallback_stock and fallback_stock.sparkline
+            else ([price] * 8 if price else [0.0] * 8)
+        )
+        candles = (
+            fallback_stock.candles
+            if fallback_stock and fallback_stock.candles
+            else [
+                CandlePoint(
+                    date="",
+                    open=round(price, 2),
+                    high=round(price, 2),
+                    low=round(price, 2),
+                    close=round(price, 2),
+                    isLimitUpClose=False,
+                )
+                for _ in range(12)
+            ] if price else []
+        )
+        bollinger = (
+            fallback_stock.bollinger
+            if fallback_stock and fallback_stock.bollinger and fallback_stock.bollinger.points
+            else BollingerProfile(
+                period=30,
+                stdMultiplier=2.0,
+                points=[
+                    BollingerPoint(date="", middle=round(price, 2), upper=round(price, 2), lower=round(price, 2))
+                    for _ in range(len(candles))
+                ],
+            )
+        ) if price else default_bollinger()
         momentum = 0
         volume_ratio = 0.0
         technicals = default_technicals()
         distribution = build_price_distribution([], price)
+        chip_distribution = fallback_chip_distribution or default_chip_distribution(price)
         amplitude_distribution = build_amplitude_distribution(code, [], 0.0, fallback_market_cap_yi)
+        limit_up_signal = fallback_stock.limitUpSignal if fallback_stock else default_limit_up_signal()
     else:
         recent = hist_df.tail(8)
+        recent_candles = hist_df.tail(12).copy()
         close_series = [float(value) for value in hist_df[C_CLOSE].tolist()]
         last_close = float(recent.iloc[-1][C_CLOSE])
         prev_close = float(recent.iloc[-2][C_CLOSE]) if len(recent) > 1 else last_close
         hist_change = ((last_close - prev_close) / prev_close * 100) if prev_close else 0.0
-        price = round(float(spot.get(C_LATEST, last_close) or last_close), 2)
-        change_pct = round(float(spot.get(C_CHANGE, hist_change) or hist_change), 2)
+        price = round(last_close, 2)
+        change_pct = round(hist_change, 2)
         sparkline = [round(float(value), 2) for value in recent[C_CLOSE].tolist()]
+        candles = build_recent_candles(code, recent_candles)
+        bollinger = build_bollinger_profile(hist_df)
         ma5 = recent[C_CLOSE].tail(5).mean()
         momentum = int(max(0, min(99, 50 + ((last_close - ma5) / ma5 * 400 if ma5 else 0))))
         recent_volume = recent[C_VOLUME].tail(5).mean()
@@ -2089,6 +4008,14 @@ def build_stock(
         volume_ratio = round(float(recent_volume / base_volume), 2) if base_volume else 0.0
         technicals = build_technical_indicators(close_series)
         distribution = build_price_distribution(close_series, price or last_close)
+        chip_distribution = build_chip_distribution_profile(
+            code,
+            start_date,
+            end_date,
+            price or last_close,
+            fallback_chip_distribution,
+        )
+        limit_up_signal = build_limit_up_signal_profile(code, hist_df, price or last_close)
 
         amplitude_series: list[float] = []
         if C_HIGH in hist_df.columns and C_LOW in hist_df.columns:
@@ -2126,8 +4053,8 @@ def build_stock(
         technicals,
     )
 
-    name = normalize_label(spot.get(C_NAME) or name_map.get(code) or manual_name_map.get(code) or code)
-    sector = normalize_label(spot.get(C_INDUSTRY) or "自选池")
+    name = normalize_label(name_map.get(code) or manual_name_map.get(code) or (fallback_stock.name if fallback_stock else "") or code)
+    sector = normalize_label((fallback_stock.sector if fallback_stock and fallback_stock.sector else "") or "自选池")
     change_label = f"{change_pct:+.2f}%"
 
     signals = [
@@ -2150,6 +4077,10 @@ def build_stock(
         note=NOTE_POOL[index % len(NOTE_POOL)],
         thesis=THESIS_POOL[index % len(THESIS_POOL)],
         sparkline=sparkline,
+        candles=candles,
+        limitUpSignal=limit_up_signal,
+        bollinger=bollinger,
+        chipDistribution=chip_distribution,
         signals=signals,
         metadata=metadata,
         companyInsight=company_insight,
@@ -2157,6 +4088,7 @@ def build_stock(
         selectionScore=selection_score,
         priceDistribution=distribution,
         amplitudeDistribution=amplitude_distribution,
+        themeLinkage=(fallback_stock.themeLinkage if fallback_stock else default_stock_theme_linkage()),
     )
 
     has_meaningful_data = built_stock.price > 0 or built_stock.priceDistribution.sampleSize > 1
@@ -2177,35 +4109,39 @@ def main() -> None:
     end_date = end.strftime("%Y%m%d")
 
     name_map = fetch_name_map(codes)
-    spot_map = fetch_spot_map(codes)
     snapshot_stock_map = load_snapshot_stock_map()
     stocks = []
-    for index, code in enumerate(codes):
-        cached_stock, cached_payload = load_stock_cache(code)
-        if cached_stock and is_stock_cache_fresh(cached_payload, start_date, end_date):
-            needs_cache_rewrite = False
-            if not cached_stock.metadata.officialWebsite:
-                fallback_stock = snapshot_stock_map.get(code)
-                fallback_metadata = fallback_stock.metadata if fallback_stock else None
-                refreshed_metadata = fetch_stock_metadata(code, fallback_metadata)
-                if refreshed_metadata.officialWebsite:
-                    cached_stock.metadata = refreshed_metadata
-                    needs_cache_rewrite = True
-            if not has_meaningful_company_insight(cached_stock.companyInsight):
-                fallback_stock = snapshot_stock_map.get(code)
-                fallback_company_insight = fallback_stock.companyInsight if fallback_stock else None
-                refreshed_company_insight = build_company_insight(code, fallback_company_insight)
-                if has_meaningful_company_insight(refreshed_company_insight):
-                    cached_stock.companyInsight = refreshed_company_insight
-                    needs_cache_rewrite = True
-            if needs_cache_rewrite:
-                write_stock_cache(code, start_date, end_date, cached_stock)
-            stocks.append(cached_stock)
-            continue
+    try:
+        for index, code in enumerate(codes):
+            cached_stock, cached_payload = load_stock_cache(code)
+            if cached_stock and is_stock_cache_fresh(cached_payload, start_date, end_date):
+                needs_cache_rewrite = False
+                if not cached_stock.metadata.officialWebsite:
+                    fallback_stock = snapshot_stock_map.get(code)
+                    fallback_metadata = fallback_stock.metadata if fallback_stock else None
+                    refreshed_metadata = fetch_stock_metadata(code, fallback_metadata)
+                    if refreshed_metadata.officialWebsite:
+                        cached_stock.metadata = refreshed_metadata
+                        needs_cache_rewrite = True
+                if not has_meaningful_company_insight(cached_stock.companyInsight):
+                    fallback_stock = snapshot_stock_map.get(code)
+                    fallback_company_insight = fallback_stock.companyInsight if fallback_stock else None
+                    refreshed_company_insight = build_company_insight(code, fallback_company_insight)
+                    if has_meaningful_company_insight(refreshed_company_insight):
+                        cached_stock.companyInsight = refreshed_company_insight
+                        needs_cache_rewrite = True
+                if needs_cache_rewrite:
+                    write_stock_cache(code, start_date, end_date, cached_stock)
+                stocks.append(cached_stock)
+                continue
 
-        fallback_stock = cached_stock or snapshot_stock_map.get(code)
-        stocks.append(build_stock(code, index, manual_name_map, name_map, spot_map, start_date, end_date, fallback_stock))
-        time.sleep(0.15)
+            fallback_stock = cached_stock or snapshot_stock_map.get(code)
+            stocks.append(build_stock(code, index, manual_name_map, name_map, start_date, end_date, fallback_stock))
+            time.sleep(0.15)
+    finally:
+        logout_baostock()
+
+    market_radar = enrich_market_radar(stocks)
 
     avg_change = round(sum(stock.changePct for stock in stocks) / len(stocks), 2) if stocks else 0.0
     strong_signals = sum(1 for stock in stocks if any(signal.level == "strong" for signal in stock.signals))
@@ -2216,6 +4152,7 @@ def main() -> None:
         "strongSignals": strong_signals,
         "avgChange": avg_change,
         "mood": "偏强" if avg_change >= 0 else "分化",
+        "marketRadar": asdict(market_radar),
         "stocks": [
             {
                 **{key: value for key, value in asdict(stock).items() if key != "signals"},

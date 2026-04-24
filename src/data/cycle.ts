@@ -1,5 +1,5 @@
 import embeddedCycleReport from "../../docs/cycles/watchlist-cycle-report.json";
-import type { CycleAnalysis, CycleOpportunity, CyclePivot, CycleSwing, DashboardSnapshot, IndicatorTone, WatchStock } from "../types";
+import type { CycleAnalysis, CycleOpportunity, CyclePivot, CycleRegime, CycleSwing, CycleWindow, DashboardSnapshot, IndicatorTone, WatchStock } from "../types";
 
 interface RawCycleEntry {
   symbol?: unknown;
@@ -16,7 +16,10 @@ interface RawCycleEntry {
   amplitude_cv?: unknown;
   latest_state?: unknown;
   chart_path?: unknown;
+  regime?: unknown;
   opportunity?: unknown;
+  recent_cycles?: unknown;
+  current_cycle?: unknown;
   pivots?: unknown;
   swings?: unknown;
 }
@@ -80,6 +83,31 @@ function normalizeSwing(value: unknown): CycleSwing {
   };
 }
 
+function normalizeCycleWindow(value: unknown): CycleWindow {
+  if (!value || typeof value !== "object") {
+    return {
+      label: "",
+      direction: "up",
+      startDate: "",
+      endDate: "",
+      tradingDays: 0,
+      returnPct: 0,
+      status: "completed"
+    };
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return {
+    label: normalizeString(candidate.label),
+    direction: candidate.direction === "down" ? "down" : "up",
+    startDate: normalizeString(candidate.start_date),
+    endDate: normalizeString(candidate.end_date),
+    tradingDays: normalizeNumber(candidate.trading_days),
+    returnPct: normalizeNumber(candidate.return_pct),
+    status: candidate.status === "ongoing" ? "ongoing" : "completed"
+  };
+}
+
 function normalizeOpportunity(value: unknown): CycleOpportunity {
   if (!value || typeof value !== "object") {
     return {
@@ -119,6 +147,41 @@ function normalizeOpportunity(value: unknown): CycleOpportunity {
   };
 }
 
+function normalizeRegime(value: unknown): CycleRegime {
+  if (!value || typeof value !== "object") {
+    return {
+      label: "待识别",
+      actionLabel: "等待状态识别",
+      tone: "neutral",
+      sinceDate: "",
+      rangeLow: 0,
+      rangeHigh: 0,
+      currentPositionPct: 0,
+      amplitudeRatio: 0,
+      liquidityRatio: 0,
+      pathEfficiency: 0,
+      recentSwingCount: 0,
+      summary: "暂无区域/趋势状态结论"
+    };
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return {
+    label: normalizeString(candidate.label, "待识别"),
+    actionLabel: normalizeString(candidate.action_label, "等待状态识别"),
+    tone: normalizeTone(candidate.tone),
+    sinceDate: normalizeString(candidate.since_date),
+    rangeLow: normalizeNumber(candidate.range_low),
+    rangeHigh: normalizeNumber(candidate.range_high),
+    currentPositionPct: normalizeNumber(candidate.current_position_pct),
+    amplitudeRatio: normalizeNumber(candidate.amplitude_ratio),
+    liquidityRatio: normalizeNumber(candidate.liquidity_ratio),
+    pathEfficiency: normalizeNumber(candidate.path_efficiency),
+    recentSwingCount: normalizeNumber(candidate.recent_swing_count),
+    summary: normalizeString(candidate.summary, "暂无区域/趋势状态结论")
+  };
+}
+
 function createFallbackCycleAnalysis(stock: WatchStock): CycleAnalysis {
   return {
     generatedAt: "",
@@ -137,6 +200,20 @@ function createFallbackCycleAnalysis(stock: WatchStock): CycleAnalysis {
     amplitudeCv: 0,
     latestState: `${stock.symbol} 暂无周期分析结果`,
     chartPath: "",
+    regime: {
+      label: "待识别",
+      actionLabel: "等待状态识别",
+      tone: "neutral",
+      sinceDate: "",
+      rangeLow: stock.price,
+      rangeHigh: stock.price,
+      currentPositionPct: 0,
+      amplitudeRatio: 0,
+      liquidityRatio: 0,
+      pathEfficiency: 0,
+      recentSwingCount: 0,
+      summary: "暂无区域/趋势状态结论"
+    },
     opportunity: {
       currentPrice: stock.price,
       currentDate: "",
@@ -152,6 +229,16 @@ function createFallbackCycleAnalysis(stock: WatchStock): CycleAnalysis {
       distanceToResistancePct: 0,
       reboundFromSupportPct: 0,
       drawdownFromResistancePct: 0
+    },
+    recentCycles: [],
+    currentCycle: {
+      label: "褰撳墠鍛ㄦ湡",
+      direction: "up",
+      startDate: "",
+      endDate: "",
+      tradingDays: 0,
+      returnPct: 0,
+      status: "ongoing"
     },
     pivots: [],
     swings: []
@@ -191,7 +278,10 @@ function normalizeCycleReport(value: unknown) {
       amplitudeCv: normalizeNumber(raw.amplitude_cv),
       latestState: normalizeString(raw.latest_state),
       chartPath: normalizeString(raw.chart_path),
+      regime: normalizeRegime(raw.regime),
       opportunity: normalizeOpportunity(raw.opportunity),
+      recentCycles: Array.isArray(raw.recent_cycles) ? raw.recent_cycles.map(normalizeCycleWindow) : [],
+      currentCycle: normalizeCycleWindow(raw.current_cycle),
       pivots: Array.isArray(raw.pivots) ? raw.pivots.map(normalizePivot) : [],
       swings: Array.isArray(raw.swings) ? raw.swings.map(normalizeSwing) : []
     });

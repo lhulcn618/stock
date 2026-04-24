@@ -3,11 +3,21 @@ import { applyCycleAnalysis } from "./cycle";
 import { watchlistSeeds } from "./watchlist";
 import type {
   AccountingBusinessInsight,
+  BollingerPoint,
+  BollingerProfile,
+  ChipDistributionBand,
+  ChipControlEvidence,
+  ChipDistributionProfile,
   CompanyInsight,
   AmplitudeDistributionProfile,
+  CandlePoint,
   DashboardSnapshot,
   IndicatorTone,
+  LimitUpSignalProfile,
   MacdIndicator,
+  MarketBreadthPoint,
+  MarketBreadthProfile,
+  MarketRadar,
   NewsSensitivityInsight,
   OfficialBusinessInsight,
   PriceDistributionBand,
@@ -16,8 +26,12 @@ import type {
   RsiIndicator,
   ScoreFactor,
   SelectionScore,
+  StockThemeLinkage,
   StockMetadata,
   TechnicalIndicators,
+  ThemeHotspot,
+  UsFocusItem,
+  UsMarketPulse,
   WatchStock
 } from "../types";
 
@@ -120,6 +134,43 @@ function createDefaultTechnicals(): TechnicalIndicators {
   };
 }
 
+function createDefaultBollinger(): BollingerProfile {
+  return {
+    period: 30,
+    stdMultiplier: 2,
+    points: []
+  };
+}
+
+function createDefaultChipDistribution(currentPrice = 0): ChipDistributionProfile {
+  const price = Number(currentPrice.toFixed(2));
+  return {
+    algorithm: "turnover_decay_v1",
+    bucketSize: 0.1,
+    sampleSize: 0,
+    tradeDate: "",
+    mainCost: price,
+    mainCostZoneLow: price,
+    mainCostZoneHigh: price,
+    mainCostZoneWidthPct: 0,
+    averageCost: price,
+    winnerRatio: 0,
+    dominantRatio: 0,
+    concentration70Low: price,
+    concentration70High: price,
+    concentration90Low: price,
+    concentration90High: price,
+    currentPriceBiasPct: 0,
+    shapeLabel: "筹码待观察",
+    stageLabel: "等待样本",
+    riskLabel: "暂无主力成本区样本",
+    tone: "neutral",
+    summary: "暂无筹码分布样本",
+    controlEvidence: [],
+    bands: []
+  };
+}
+
 function createDefaultSelectionScore(): SelectionScore {
   return {
     total: 0,
@@ -127,6 +178,119 @@ function createDefaultSelectionScore(): SelectionScore {
     grade: "D",
     summary: "等待更多信号",
     factors: []
+  };
+}
+
+function createDefaultThemeHotspot(): ThemeHotspot {
+  return {
+    boardType: "concept",
+    name: "",
+    code: "",
+    rank: 0,
+    changePct: 0,
+    riseCount: 0,
+    fallCount: 0,
+    leaderName: "",
+    leaderCode: "",
+    leaderChangePct: 0,
+    matchReason: ""
+  };
+}
+
+function createDefaultStockThemeLinkage(): StockThemeLinkage {
+  return {
+    updatedAt: "",
+    industry: "",
+    concepts: [],
+    matchedKeywords: [],
+    hotBoards: [],
+    relatedEtfs: [],
+    summary: "暂无板块联动结果"
+  };
+}
+
+function createDefaultLimitUpSignal(): LimitUpSignalProfile {
+  return {
+    recentLimitUpCount10: 0,
+    isHoldingAboveOpen: false,
+    anchorDate: "",
+    anchorOpen: 0,
+    anchorClose: 0,
+    holdDays: 0,
+    currentBiasPct: 0,
+    tone: "neutral",
+    summary: "暂无涨停守开信号"
+  };
+}
+
+function createDefaultUsFocusItem(): UsFocusItem {
+  return {
+    key: "",
+    name: "",
+    symbol: "",
+    category: "",
+    lastTradeDate: "",
+    close: 0,
+    prevClose: 0,
+    changePct: 0,
+    high: 0,
+    low: 0,
+    volume: 0,
+    tone: "neutral",
+    summary: "暂无隔夜摘要",
+    news: []
+  };
+}
+
+function createDefaultUsMarketPulse(): UsMarketPulse {
+  return {
+    updatedAt: "",
+    tradeDate: "",
+    summary: "暂无隔夜美股晨报",
+    items: []
+  };
+}
+
+function createDefaultMarketBreadthPoint(): MarketBreadthPoint {
+  return {
+    timestamp: "",
+    totalUp: 0,
+    totalDown: 0,
+    limitUp: 0,
+    limitDown: 0,
+    flatCount: 0,
+    netAdvance: 0
+  };
+}
+
+function createDefaultMarketBreadth(): MarketBreadthProfile {
+  return {
+    updatedAt: "",
+    tradeDate: "",
+    activityPct: 0,
+    upCount: 0,
+    downCount: 0,
+    flatCount: 0,
+    limitUpCount: 0,
+    limitDownCount: 0,
+    netAdvance: 0,
+    advanceDeclineRatio: 0,
+    breadthLow: 0,
+    breadthHigh: 0,
+    tone: "neutral",
+    signalLabel: "鏆傛棤甯傚満瀹藉害鏍锋湰",
+    summary: "鏆傛棤涓婃定/涓嬭穼瀹舵暟鏇茬嚎",
+    trendPoints: []
+  };
+}
+
+function createDefaultMarketRadar(): MarketRadar {
+  return {
+    updatedAt: "",
+    hottestBoards: [],
+    hottestEtfs: [],
+    usMarketPulse: createDefaultUsMarketPulse(),
+    marketBreadth: createDefaultMarketBreadth()
   };
 }
 
@@ -291,19 +455,558 @@ function normalizeCompanyInsight(value: unknown): CompanyInsight {
 }
 
 function normalizeImportedStock(stock: WatchStock): WatchStock {
+  const normalizedCandles = normalizeCandlePoints(
+    (stock as WatchStock & { candles?: unknown }).candles,
+    stock.sparkline
+  );
+
   return {
     ...stock,
+    candles: normalizedCandles,
+    limitUpSignal: normalizeLimitUpSignal((stock as WatchStock & { limitUpSignal?: unknown }).limitUpSignal),
+    bollinger: normalizeBollingerProfile(
+      (stock as WatchStock & { bollinger?: unknown }).bollinger,
+      normalizedCandles
+    ),
+    chipDistribution: normalizeChipDistribution(
+      (stock as WatchStock & { chipDistribution?: unknown }).chipDistribution,
+      normalizedCandles,
+      stock.price
+    ),
     metadata: normalizeStockMetadata((stock as WatchStock & { metadata?: unknown }).metadata),
     companyInsight: normalizeCompanyInsight((stock as WatchStock & { companyInsight?: unknown }).companyInsight),
     technicals: normalizeTechnicals((stock as WatchStock & { technicals?: unknown }).technicals),
-    selectionScore: normalizeSelectionScore((stock as WatchStock & { selectionScore?: unknown }).selectionScore)
+    selectionScore: normalizeSelectionScore((stock as WatchStock & { selectionScore?: unknown }).selectionScore),
+    themeLinkage: normalizeStockThemeLinkage((stock as WatchStock & { themeLinkage?: unknown }).themeLinkage)
   };
 }
 
-const snapshot = applyCycleAnalysis({
-  ...(akshareSnapshot as DashboardSnapshot),
-  stocks: ((akshareSnapshot as DashboardSnapshot).stocks ?? []).map((stock) => normalizeImportedStock(stock as WatchStock))
-} as DashboardSnapshot);
+function normalizeBollingerPoint(value: unknown): BollingerPoint {
+  if (!value || typeof value !== "object") {
+    return {
+      date: "",
+      middle: 0,
+      upper: 0,
+      lower: 0
+    };
+  }
+
+  const candidate = value as Partial<BollingerPoint>;
+  return {
+    date: typeof candidate.date === "string" ? candidate.date : "",
+    middle: typeof candidate.middle === "number" ? candidate.middle : 0,
+    upper: typeof candidate.upper === "number" ? candidate.upper : 0,
+    lower: typeof candidate.lower === "number" ? candidate.lower : 0
+  };
+}
+
+function deriveBollingerFromCandles(source: CandlePoint[]): BollingerProfile {
+  const closes = source.map((item) => item.close);
+  const period = 30;
+  const stdMultiplier = 2;
+  const points = source.map((item, index) => {
+    const windowStart = Math.max(0, index - period + 1);
+    const window = closes.slice(windowStart, index + 1);
+    const mean = window.reduce((sum, value) => sum + value, 0) / window.length;
+    const variance = window.reduce((sum, value) => sum + ((value - mean) ** 2), 0) / window.length;
+    const deviation = Math.sqrt(variance);
+    return {
+      date: item.date,
+      middle: Number(mean.toFixed(2)),
+      upper: Number((mean + deviation * stdMultiplier).toFixed(2)),
+      lower: Number((mean - deviation * stdMultiplier).toFixed(2))
+    };
+  });
+
+  return {
+    period,
+    stdMultiplier,
+    points
+  };
+}
+
+function normalizeBollingerProfile(value: unknown, fallbackCandles: CandlePoint[]): BollingerProfile {
+  if (!value || typeof value !== "object") {
+    return deriveBollingerFromCandles(fallbackCandles);
+  }
+
+  const candidate = value as Partial<BollingerProfile>;
+  const points = Array.isArray(candidate.points) ? candidate.points.map((item) => normalizeBollingerPoint(item)) : [];
+  if (points.length === 0) {
+    return deriveBollingerFromCandles(fallbackCandles);
+  }
+
+  return {
+    period: typeof candidate.period === "number" ? candidate.period : 30,
+    stdMultiplier: typeof candidate.stdMultiplier === "number" ? candidate.stdMultiplier : 2,
+    points
+  };
+}
+
+function normalizeChipBand(value: unknown): ChipDistributionBand {
+  if (!value || typeof value !== "object") {
+    return { price: 0, ratio: 0 };
+  }
+
+  const candidate = value as Partial<ChipDistributionBand>;
+  return {
+    price: typeof candidate.price === "number" ? candidate.price : 0,
+    ratio: typeof candidate.ratio === "number" ? candidate.ratio : 0
+  };
+}
+
+function normalizeChipControlEvidence(value: unknown): ChipControlEvidence {
+  if (!value || typeof value !== "object") {
+    return {
+      key: "",
+      label: "",
+      value: "",
+      tone: "neutral",
+      summary: ""
+    };
+  }
+
+  const candidate = value as Partial<ChipControlEvidence>;
+  return {
+    key: typeof candidate.key === "string" ? candidate.key : "",
+    label: typeof candidate.label === "string" ? candidate.label : "",
+    value: typeof candidate.value === "string" ? candidate.value : "",
+    tone: candidate.tone === "positive" || candidate.tone === "negative" || candidate.tone === "alert" ? candidate.tone : "neutral",
+    summary: typeof candidate.summary === "string" ? candidate.summary : ""
+  };
+}
+
+function deriveChipInsights(
+  bands: ChipDistributionBand[],
+  currentPrice: number,
+  bucketSize: number,
+  mainCost: number,
+  dominantRatio: number,
+  concentration90Low: number,
+  concentration90High: number,
+  winnerRatio: number
+) {
+  const dominantIndex = Math.max(0, bands.findIndex((item) => item.price === mainCost));
+  const threshold = Math.max(dominantRatio * 0.35, 0.02);
+  let start = dominantIndex;
+  let end = dominantIndex;
+
+  while (start > 0 && (bands[start - 1]?.ratio ?? 0) >= threshold) {
+    start -= 1;
+  }
+  while (end < bands.length - 1 && (bands[end + 1]?.ratio ?? 0) >= threshold) {
+    end += 1;
+  }
+
+  const zoneLow = Number((bands[start]?.price ?? mainCost ?? currentPrice).toFixed(2));
+  const zoneHigh = Number((bands[end]?.price ?? mainCost ?? currentPrice).toFixed(2));
+  const zoneWidthPct = mainCost > 0 ? Number((((zoneHigh - zoneLow) / mainCost) * 100).toFixed(2)) : 0;
+  const span = Math.max(concentration90High - concentration90Low, bucketSize);
+  const zoneMid = (zoneLow + zoneHigh) / 2;
+  const zonePosition = span > 0 ? (zoneMid - concentration90Low) / span : 0.5;
+
+  let shapeLabel = "筹码密集";
+  let stageLabel = "震荡换手";
+  let riskLabel = "筹码集中但方向未完全展开";
+  let tone: IndicatorTone = "neutral";
+
+  if (currentPrice >= zoneHigh * 1.08 && winnerRatio >= 0.68) {
+    shapeLabel = "向上发散";
+    stageLabel = "拉升展开";
+    riskLabel = "已经脱离主力成本区，趋势在走，但不宜追高";
+    tone = "positive";
+  } else if (currentPrice <= zoneLow * 0.92 && winnerRatio <= 0.35) {
+    shapeLabel = "向下发散";
+    stageLabel = "下行出清";
+    riskLabel = "价格落在主力成本区下方，筹码承压明显";
+    tone = "negative";
+  } else if (zoneWidthPct <= 12 && zonePosition <= 0.35) {
+    shapeLabel = "低位密集";
+    stageLabel = "吸筹蓄势";
+    riskLabel = "低位换手较充分，等待放量确认";
+    tone = "positive";
+  } else if (zoneWidthPct <= 12 && zonePosition >= 0.65) {
+    shapeLabel = "高位密集";
+    stageLabel = "高位博弈";
+    riskLabel = "高位筹码堆积，优先防派发风险";
+    tone = "alert";
+  } else if (zoneWidthPct > 18) {
+    shapeLabel = "宽幅发散";
+    stageLabel = "筹码分散";
+    riskLabel = "持仓成本差异较大，控盘轮廓不够清晰";
+  }
+
+  const controlEvidence: ChipControlEvidence[] = [
+    {
+      key: "cost_zone",
+      label: "成本区位置",
+      value: currentPrice > zoneHigh ? `高于成本区 ${(((currentPrice / zoneHigh) - 1) * 100).toFixed(1)}%` : currentPrice < zoneLow ? `低于成本区 ${((1 - (currentPrice / zoneLow)) * 100).toFixed(1)}%` : "处于成本区内",
+      tone: currentPrice > zoneHigh ? "alert" : currentPrice < zoneLow ? "negative" : "positive",
+      summary: "用于判断当前价格是否仍围绕主力成本区运行。"
+    },
+    {
+      key: "winner_lock",
+      label: "90比3",
+      value: `获利 ${(winnerRatio * 100).toFixed(1)}%`,
+      tone: winnerRatio >= 0.9 ? "positive" : winnerRatio >= 0.75 ? "neutral" : "negative",
+      summary: winnerRatio >= 0.9 ? "已接近或满足 90 比 3。" : "仅作为 fallback 估算，等待真实快照覆盖。"
+    }
+  ];
+
+  return {
+    zoneLow,
+    zoneHigh,
+    zoneWidthPct,
+    shapeLabel,
+    stageLabel,
+    riskLabel,
+    tone,
+    controlEvidence
+  };
+}
+
+function deriveChipDistributionFromCandles(source: CandlePoint[], currentPrice: number): ChipDistributionProfile {
+  if (source.length === 0) {
+    return createDefaultChipDistribution(currentPrice);
+  }
+
+  const bucketSize = currentPrice >= 100 ? 0.2 : 0.1;
+  const buckets = new Map<number, number>();
+  source.forEach((item) => {
+    const bucket = Number((Math.round(item.close / bucketSize) * bucketSize).toFixed(2));
+    buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
+  });
+
+  const sampleSize = source.length;
+  const bands = [...buckets.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([price, count]) => ({
+      price,
+      ratio: Number((count / sampleSize).toFixed(6))
+    }));
+
+  const mainBand = [...bands].sort((a, b) => b.ratio - a.ratio)[0] ?? { price: currentPrice, ratio: 0 };
+  const averageCost = bands.reduce((sum, item) => sum + item.price * item.ratio, 0);
+  const winnerRatio = bands.filter((item) => item.price <= currentPrice).reduce((sum, item) => sum + item.ratio, 0);
+  const prices = bands.map((item) => item.price);
+  const low70Index = Math.max(0, Math.floor((prices.length - 1) * 0.15));
+  const high70Index = Math.max(low70Index, Math.floor((prices.length - 1) * 0.85));
+  const low90Index = Math.max(0, Math.floor((prices.length - 1) * 0.05));
+  const high90Index = Math.max(low90Index, Math.floor((prices.length - 1) * 0.95));
+  const mainCost = mainBand.price || currentPrice;
+  const concentration90Low = Number((prices[low90Index] ?? currentPrice).toFixed(2));
+  const concentration90High = Number((prices[high90Index] ?? currentPrice).toFixed(2));
+  const insight = deriveChipInsights(
+    bands,
+    currentPrice,
+    bucketSize,
+    mainCost,
+    mainBand.ratio,
+    concentration90Low,
+    concentration90High,
+    winnerRatio
+  );
+
+  return {
+    algorithm: "turnover_decay_v1",
+    bucketSize,
+    sampleSize,
+    tradeDate: source[source.length - 1]?.date ?? "",
+    mainCost: Number(mainCost.toFixed(2)),
+    mainCostZoneLow: insight.zoneLow,
+    mainCostZoneHigh: insight.zoneHigh,
+    mainCostZoneWidthPct: insight.zoneWidthPct,
+    averageCost: Number(averageCost.toFixed(2)),
+    winnerRatio: Number(winnerRatio.toFixed(6)),
+    dominantRatio: Number(mainBand.ratio.toFixed(6)),
+    concentration70Low: Number((prices[low70Index] ?? currentPrice).toFixed(2)),
+    concentration70High: Number((prices[high70Index] ?? currentPrice).toFixed(2)),
+    concentration90Low,
+    concentration90High,
+    currentPriceBiasPct: mainCost ? Number((((currentPrice / mainCost) - 1) * 100).toFixed(2)) : 0,
+    shapeLabel: insight.shapeLabel,
+    stageLabel: insight.stageLabel,
+    riskLabel: insight.riskLabel,
+    tone: insight.tone,
+    summary: `${insight.shapeLabel}，主力成本区 ${insight.zoneLow.toFixed(2)}-${insight.zoneHigh.toFixed(2)}，获利盘 ${(winnerRatio * 100).toFixed(1)}%。${insight.riskLabel}`,
+    controlEvidence: insight.controlEvidence,
+    bands
+  };
+}
+
+function normalizeChipDistribution(
+  value: unknown,
+  fallbackCandles: CandlePoint[],
+  currentPrice: number
+): ChipDistributionProfile {
+  if (!value || typeof value !== "object") {
+    return deriveChipDistributionFromCandles(fallbackCandles, currentPrice);
+  }
+
+  const candidate = value as Partial<ChipDistributionProfile>;
+  const bands = Array.isArray(candidate.bands) ? candidate.bands.map((item) => normalizeChipBand(item)) : [];
+  if (bands.length === 0) {
+    return deriveChipDistributionFromCandles(fallbackCandles, currentPrice);
+  }
+  const mainCost = typeof candidate.mainCost === "number" ? candidate.mainCost : currentPrice;
+  const bucketSize = typeof candidate.bucketSize === "number" ? candidate.bucketSize : 0.1;
+  const dominantRatio = typeof candidate.dominantRatio === "number" ? candidate.dominantRatio : 0;
+  const concentration90Low = typeof candidate.concentration90Low === "number" ? candidate.concentration90Low : currentPrice;
+  const concentration90High = typeof candidate.concentration90High === "number" ? candidate.concentration90High : currentPrice;
+  const winnerRatio = typeof candidate.winnerRatio === "number" ? candidate.winnerRatio : 0;
+  const derivedInsight = deriveChipInsights(
+    bands,
+    currentPrice,
+    bucketSize,
+    mainCost,
+    dominantRatio,
+    concentration90Low,
+    concentration90High,
+    winnerRatio
+  );
+  const controlEvidence = Array.isArray(candidate.controlEvidence)
+    ? candidate.controlEvidence.map((item) => normalizeChipControlEvidence(item)).filter((item) => item.label)
+    : [];
+
+  return {
+    algorithm: typeof candidate.algorithm === "string" ? candidate.algorithm : "turnover_decay_v1",
+    bucketSize,
+    sampleSize: typeof candidate.sampleSize === "number" ? candidate.sampleSize : fallbackCandles.length,
+    tradeDate: typeof candidate.tradeDate === "string" ? candidate.tradeDate : "",
+    mainCost,
+    mainCostZoneLow: typeof candidate.mainCostZoneLow === "number" ? candidate.mainCostZoneLow : derivedInsight.zoneLow,
+    mainCostZoneHigh: typeof candidate.mainCostZoneHigh === "number" ? candidate.mainCostZoneHigh : derivedInsight.zoneHigh,
+    mainCostZoneWidthPct: typeof candidate.mainCostZoneWidthPct === "number" ? candidate.mainCostZoneWidthPct : derivedInsight.zoneWidthPct,
+    averageCost: typeof candidate.averageCost === "number" ? candidate.averageCost : currentPrice,
+    winnerRatio,
+    dominantRatio,
+    concentration70Low: typeof candidate.concentration70Low === "number" ? candidate.concentration70Low : currentPrice,
+    concentration70High: typeof candidate.concentration70High === "number" ? candidate.concentration70High : currentPrice,
+    concentration90Low,
+    concentration90High,
+    currentPriceBiasPct: typeof candidate.currentPriceBiasPct === "number" ? candidate.currentPriceBiasPct : 0,
+    shapeLabel: typeof candidate.shapeLabel === "string" ? candidate.shapeLabel : derivedInsight.shapeLabel,
+    stageLabel: typeof candidate.stageLabel === "string" ? candidate.stageLabel : derivedInsight.stageLabel,
+    riskLabel: typeof candidate.riskLabel === "string" ? candidate.riskLabel : derivedInsight.riskLabel,
+    tone: candidate.tone === "positive" || candidate.tone === "negative" || candidate.tone === "alert" ? candidate.tone : derivedInsight.tone,
+    summary: typeof candidate.summary === "string" ? candidate.summary : `${derivedInsight.shapeLabel}，等待真实快照刷新`,
+    controlEvidence: controlEvidence.length > 0 ? controlEvidence : derivedInsight.controlEvidence,
+    bands
+  };
+}
+
+function normalizeCandlePoint(value: unknown, index: number, fallbackClose: number): CandlePoint {
+  if (!value || typeof value !== "object") {
+    return {
+      date: "",
+      open: fallbackClose,
+      high: fallbackClose,
+      low: fallbackClose,
+      close: fallbackClose,
+      isLimitUpClose: false
+    };
+  }
+
+  const candidate = value as Partial<CandlePoint>;
+  const close = typeof candidate.close === "number" ? candidate.close : fallbackClose;
+  const open = typeof candidate.open === "number" ? candidate.open : close;
+  const high = typeof candidate.high === "number" ? candidate.high : Math.max(open, close);
+  const low = typeof candidate.low === "number" ? candidate.low : Math.min(open, close);
+
+  return {
+    date: typeof candidate.date === "string" ? candidate.date : `D${index + 1}`,
+    open,
+    high,
+    low,
+    close,
+    isLimitUpClose: candidate.isLimitUpClose === true
+  };
+}
+
+function deriveCandlesFromCloses(source: number[]): CandlePoint[] {
+  return source.slice(-12).map((close, index, list) => {
+    const prevClose = index > 0 ? list[index - 1] : close;
+    const open = Number(((prevClose + close) / 2).toFixed(2));
+    const high = Number((Math.max(open, close) * 1.01).toFixed(2));
+    const low = Number((Math.min(open, close) * 0.99).toFixed(2));
+    return {
+      date: `D${index + 1}`,
+      open,
+      high,
+      low,
+      close: Number(close.toFixed(2)),
+      isLimitUpClose: false
+    };
+  });
+}
+
+function normalizeCandlePoints(value: unknown, fallbackSource: number[]): CandlePoint[] {
+  if (!Array.isArray(value) || value.length === 0) {
+    return deriveCandlesFromCloses(fallbackSource);
+  }
+
+  return value.map((item, index) => {
+    const fallbackClose = fallbackSource[index] ?? fallbackSource[fallbackSource.length - 1] ?? 0;
+    return normalizeCandlePoint(item, index, fallbackClose);
+  });
+}
+
+function normalizeThemeHotspot(value: unknown): ThemeHotspot {
+  if (!value || typeof value !== "object") {
+    return createDefaultThemeHotspot();
+  }
+
+  const candidate = value as Partial<ThemeHotspot>;
+  return {
+    boardType: candidate.boardType === "industry" || candidate.boardType === "etf" ? candidate.boardType : "concept",
+    name: typeof candidate.name === "string" ? candidate.name : "",
+    code: typeof candidate.code === "string" ? candidate.code : "",
+    rank: typeof candidate.rank === "number" ? candidate.rank : 0,
+    changePct: typeof candidate.changePct === "number" ? candidate.changePct : 0,
+    riseCount: typeof candidate.riseCount === "number" ? candidate.riseCount : 0,
+    fallCount: typeof candidate.fallCount === "number" ? candidate.fallCount : 0,
+    leaderName: typeof candidate.leaderName === "string" ? candidate.leaderName : "",
+    leaderCode: typeof candidate.leaderCode === "string" ? candidate.leaderCode : "",
+    leaderChangePct: typeof candidate.leaderChangePct === "number" ? candidate.leaderChangePct : 0,
+    matchReason: typeof candidate.matchReason === "string" ? candidate.matchReason : ""
+  };
+}
+
+function normalizeStockThemeLinkage(value: unknown): StockThemeLinkage {
+  if (!value || typeof value !== "object") {
+    return createDefaultStockThemeLinkage();
+  }
+
+  const candidate = value as Partial<StockThemeLinkage>;
+  return {
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+    industry: typeof candidate.industry === "string" ? candidate.industry : "",
+    concepts: Array.isArray(candidate.concepts) ? candidate.concepts.filter((item): item is string => typeof item === "string") : [],
+    matchedKeywords: Array.isArray(candidate.matchedKeywords)
+      ? candidate.matchedKeywords.filter((item): item is string => typeof item === "string")
+      : [],
+    hotBoards: Array.isArray(candidate.hotBoards) ? candidate.hotBoards.map((item) => normalizeThemeHotspot(item)) : [],
+    relatedEtfs: Array.isArray(candidate.relatedEtfs) ? candidate.relatedEtfs.map((item) => normalizeThemeHotspot(item)) : [],
+    summary: typeof candidate.summary === "string" ? candidate.summary : "暂无板块联动结果"
+  };
+}
+
+function normalizeLimitUpSignal(value: unknown): LimitUpSignalProfile {
+  if (!value || typeof value !== "object") {
+    return createDefaultLimitUpSignal();
+  }
+
+  const candidate = value as Partial<LimitUpSignalProfile>;
+  return {
+    recentLimitUpCount10: typeof candidate.recentLimitUpCount10 === "number" ? candidate.recentLimitUpCount10 : 0,
+    isHoldingAboveOpen: candidate.isHoldingAboveOpen === true,
+    anchorDate: typeof candidate.anchorDate === "string" ? candidate.anchorDate : "",
+    anchorOpen: typeof candidate.anchorOpen === "number" ? candidate.anchorOpen : 0,
+    anchorClose: typeof candidate.anchorClose === "number" ? candidate.anchorClose : 0,
+    holdDays: typeof candidate.holdDays === "number" ? candidate.holdDays : 0,
+    currentBiasPct: typeof candidate.currentBiasPct === "number" ? candidate.currentBiasPct : 0,
+    tone: normalizeTone(candidate.tone),
+    summary: typeof candidate.summary === "string" ? candidate.summary : "暂无涨停守开信号"
+  };
+}
+
+function normalizeUsFocusItem(value: unknown): UsFocusItem {
+  if (!value || typeof value !== "object") {
+    return createDefaultUsFocusItem();
+  }
+
+  const candidate = value as Partial<UsFocusItem>;
+  return {
+    key: typeof candidate.key === "string" ? candidate.key : "",
+    name: typeof candidate.name === "string" ? candidate.name : "",
+    symbol: typeof candidate.symbol === "string" ? candidate.symbol : "",
+    category: typeof candidate.category === "string" ? candidate.category : "",
+    lastTradeDate: typeof candidate.lastTradeDate === "string" ? candidate.lastTradeDate : "",
+    close: typeof candidate.close === "number" ? candidate.close : 0,
+    prevClose: typeof candidate.prevClose === "number" ? candidate.prevClose : 0,
+    changePct: typeof candidate.changePct === "number" ? candidate.changePct : 0,
+    high: typeof candidate.high === "number" ? candidate.high : 0,
+    low: typeof candidate.low === "number" ? candidate.low : 0,
+    volume: typeof candidate.volume === "number" ? candidate.volume : 0,
+    tone: candidate.tone === "positive" || candidate.tone === "negative" || candidate.tone === "alert" ? candidate.tone : "neutral",
+    summary: typeof candidate.summary === "string" ? candidate.summary : "暂无隔夜摘要",
+    news: Array.isArray(candidate.news) ? candidate.news.filter((item) => !!item && typeof item === "object") as UsFocusItem["news"] : []
+  };
+}
+
+function normalizeMarketBreadthPoint(value: unknown): MarketBreadthPoint {
+  if (!value || typeof value !== "object") {
+    return createDefaultMarketBreadthPoint();
+  }
+
+  const candidate = value as Partial<MarketBreadthPoint>;
+  return {
+    timestamp: typeof candidate.timestamp === "string" ? candidate.timestamp : "",
+    totalUp: typeof candidate.totalUp === "number" ? candidate.totalUp : 0,
+    totalDown: typeof candidate.totalDown === "number" ? candidate.totalDown : 0,
+    limitUp: typeof candidate.limitUp === "number" ? candidate.limitUp : 0,
+    limitDown: typeof candidate.limitDown === "number" ? candidate.limitDown : 0,
+    flatCount: typeof candidate.flatCount === "number" ? candidate.flatCount : 0,
+    netAdvance: typeof candidate.netAdvance === "number" ? candidate.netAdvance : 0
+  };
+}
+
+function normalizeMarketBreadth(value: unknown): MarketBreadthProfile {
+  if (!value || typeof value !== "object") {
+    return createDefaultMarketBreadth();
+  }
+
+  const candidate = value as Partial<MarketBreadthProfile>;
+  return {
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+    tradeDate: typeof candidate.tradeDate === "string" ? candidate.tradeDate : "",
+    activityPct: typeof candidate.activityPct === "number" ? candidate.activityPct : 0,
+    upCount: typeof candidate.upCount === "number" ? candidate.upCount : 0,
+    downCount: typeof candidate.downCount === "number" ? candidate.downCount : 0,
+    flatCount: typeof candidate.flatCount === "number" ? candidate.flatCount : 0,
+    limitUpCount: typeof candidate.limitUpCount === "number" ? candidate.limitUpCount : 0,
+    limitDownCount: typeof candidate.limitDownCount === "number" ? candidate.limitDownCount : 0,
+    netAdvance: typeof candidate.netAdvance === "number" ? candidate.netAdvance : 0,
+    advanceDeclineRatio: typeof candidate.advanceDeclineRatio === "number" ? candidate.advanceDeclineRatio : 0,
+    breadthLow: typeof candidate.breadthLow === "number" ? candidate.breadthLow : 0,
+    breadthHigh: typeof candidate.breadthHigh === "number" ? candidate.breadthHigh : 0,
+    tone: normalizeTone(candidate.tone),
+    signalLabel: typeof candidate.signalLabel === "string" ? candidate.signalLabel : "鏆傛棤甯傚満瀹藉害鏍锋湰",
+    summary: typeof candidate.summary === "string" ? candidate.summary : "鏆傛棤涓婃定/涓嬭穼瀹舵暟鏇茬嚎",
+    trendPoints: Array.isArray(candidate.trendPoints) ? candidate.trendPoints.map((item) => normalizeMarketBreadthPoint(item)) : []
+  };
+}
+
+function normalizeMarketRadar(value: unknown): MarketRadar {
+  if (!value || typeof value !== "object") {
+    return createDefaultMarketRadar();
+  }
+
+  const candidate = value as Partial<MarketRadar>;
+  const usPulse = candidate.usMarketPulse && typeof candidate.usMarketPulse === "object" ? candidate.usMarketPulse : undefined;
+  return {
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+    hottestBoards: Array.isArray(candidate.hottestBoards) ? candidate.hottestBoards.map((item) => normalizeThemeHotspot(item)) : [],
+    hottestEtfs: Array.isArray(candidate.hottestEtfs) ? candidate.hottestEtfs.map((item) => normalizeThemeHotspot(item)) : [],
+    marketBreadth: normalizeMarketBreadth(candidate.marketBreadth),
+    usMarketPulse: {
+      updatedAt: typeof usPulse?.updatedAt === "string" ? usPulse.updatedAt : "",
+      tradeDate: typeof usPulse?.tradeDate === "string" ? usPulse.tradeDate : "",
+      summary: typeof usPulse?.summary === "string" ? usPulse.summary : "暂无隔夜美股晨报",
+      items: Array.isArray(usPulse?.items) ? usPulse.items.map((item) => normalizeUsFocusItem(item)) : []
+    }
+  };
+}
+
+export function normalizeDashboardSnapshot(value: DashboardSnapshot): DashboardSnapshot {
+  return {
+    ...value,
+    marketRadar: normalizeMarketRadar(value.marketRadar),
+    stocks: (value.stocks ?? []).map((stock) => normalizeImportedStock(stock as WatchStock))
+  };
+}
+
+const snapshot = applyCycleAnalysis(normalizeDashboardSnapshot(akshareSnapshot as DashboardSnapshot));
 
 function createSparkline(seed: number) {
   return Array.from({ length: 8 }, (_, index) => {
@@ -312,6 +1015,29 @@ function createSparkline(seed: number) {
     const wobble = ((seed + index * 3) % 4) * 0.08;
     return Number((base + slope + wobble).toFixed(2));
   });
+}
+
+function createCandles(seed: number, price: number) {
+  const closes = createCloseSeries(seed, price).slice(-12);
+  return closes.map((close, index, list) => {
+    const prevClose = index > 0 ? list[index - 1] : close - ((seed % 5) - 2) * 0.14;
+    const open = Number((prevClose + ((seed + index) % 3 - 1) * 0.18).toFixed(2));
+    const closePrice = Number(close.toFixed(2));
+    const high = Number((Math.max(open, closePrice) + 0.18 + ((seed + index) % 4) * 0.07).toFixed(2));
+    const low = Number((Math.min(open, closePrice) - 0.18 - ((seed + index) % 3) * 0.05).toFixed(2));
+    return {
+      date: `D${index + 1}`,
+      open,
+      high,
+      low: Number(Math.max(0.01, low).toFixed(2)),
+      close: closePrice,
+      isLimitUpClose: false
+    };
+  });
+}
+
+function createBollinger(seed: number, price: number) {
+  return deriveBollingerFromCandles(createCandles(seed, price));
 }
 
 function createCloseSeries(seed: number, price: number) {
@@ -900,6 +1626,10 @@ function buildFallbackStock(code: string, index: number): WatchStock {
     note: notePool[index % notePool.length],
     thesis: thesisPool[index % thesisPool.length],
     sparkline: createSparkline(numericSeed),
+    candles: createCandles(numericSeed, price),
+    limitUpSignal: createDefaultLimitUpSignal(),
+    bollinger: createBollinger(numericSeed, price),
+    chipDistribution: deriveChipDistributionFromCandles(createCandles(numericSeed, price), price),
     signals: [
       { label: "涨跌", value: `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`, level: signalLevel },
       { label: "动能", value: String(momentum), level: momentum >= 75 ? "strong" : "watch" },
@@ -913,7 +1643,8 @@ function buildFallbackStock(code: string, index: number): WatchStock {
     technicals,
     selectionScore,
     priceDistribution,
-    amplitudeDistribution
+    amplitudeDistribution,
+    themeLinkage: createDefaultStockThemeLinkage()
   };
 }
 
@@ -927,6 +1658,7 @@ export function getFallbackSnapshot(): DashboardSnapshot {
     strongSignals: stocks.filter((stock) => stock.signals.some((signal) => signal.level === "strong")).length,
     avgChange: Number(averageChange.toFixed(2)),
     mood: averageChange >= 0 ? "偏强" : "分化",
+    marketRadar: createDefaultMarketRadar(),
     stocks
   });
 }

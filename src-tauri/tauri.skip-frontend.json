@@ -1,0 +1,6 @@
+{
+  "build": {
+    "beforeBuildCommand": "echo skip-frontend-build",
+    "frontendDist": "../dist"
+  }
+}

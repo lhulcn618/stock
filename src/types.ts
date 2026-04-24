@@ -131,6 +131,143 @@ export interface TechnicalIndicators {
   rsi14: RsiIndicator;
 }
 
+export interface BollingerPoint {
+  date: string;
+  middle: number;
+  upper: number;
+  lower: number;
+}
+
+export interface BollingerProfile {
+  period: number;
+  stdMultiplier: number;
+  points: BollingerPoint[];
+}
+
+export interface ChipDistributionBand {
+  price: number;
+  ratio: number;
+}
+
+export interface ChipControlEvidence {
+  key: string;
+  label: string;
+  value: string;
+  tone: IndicatorTone;
+  summary: string;
+}
+
+export interface ChipDistributionProfile {
+  algorithm: string;
+  bucketSize: number;
+  sampleSize: number;
+  tradeDate: string;
+  mainCost: number;
+  mainCostZoneLow: number;
+  mainCostZoneHigh: number;
+  mainCostZoneWidthPct: number;
+  averageCost: number;
+  winnerRatio: number;
+  dominantRatio: number;
+  concentration70Low: number;
+  concentration70High: number;
+  concentration90Low: number;
+  concentration90High: number;
+  currentPriceBiasPct: number;
+  shapeLabel: string;
+  stageLabel: string;
+  riskLabel: string;
+  tone: IndicatorTone;
+  summary: string;
+  controlEvidence: ChipControlEvidence[];
+  bands: ChipDistributionBand[];
+}
+
+export interface ThemeHotspot {
+  boardType: "industry" | "concept" | "etf";
+  name: string;
+  code: string;
+  rank: number;
+  changePct: number;
+  riseCount: number;
+  fallCount: number;
+  leaderName: string;
+  leaderCode: string;
+  leaderChangePct: number;
+  matchReason: string;
+}
+
+export interface StockThemeLinkage {
+  updatedAt: string;
+  industry: string;
+  concepts: string[];
+  matchedKeywords: string[];
+  hotBoards: ThemeHotspot[];
+  relatedEtfs: ThemeHotspot[];
+  summary: string;
+}
+
+export interface UsFocusItem {
+  key: string;
+  name: string;
+  symbol: string;
+  category: string;
+  lastTradeDate: string;
+  close: number;
+  prevClose: number;
+  changePct: number;
+  high: number;
+  low: number;
+  volume: number;
+  tone: IndicatorTone;
+  summary: string;
+  news: NewsInsightItem[];
+}
+
+export interface UsMarketPulse {
+  updatedAt: string;
+  tradeDate: string;
+  summary: string;
+  items: UsFocusItem[];
+}
+
+export interface MarketBreadthPoint {
+  timestamp: string;
+  totalUp: number;
+  totalDown: number;
+  limitUp: number;
+  limitDown: number;
+  flatCount: number;
+  netAdvance: number;
+}
+
+export interface MarketBreadthProfile {
+  updatedAt: string;
+  tradeDate: string;
+  activityPct: number;
+  upCount: number;
+  downCount: number;
+  flatCount: number;
+  limitUpCount: number;
+  limitDownCount: number;
+  netAdvance: number;
+  advanceDeclineRatio: number;
+  breadthLow: number;
+  breadthHigh: number;
+  tone: IndicatorTone;
+  signalLabel: string;
+  summary: string;
+  trendPoints: MarketBreadthPoint[];
+}
+
+export interface MarketRadar {
+  updatedAt: string;
+  hottestBoards: ThemeHotspot[];
+  hottestEtfs: ThemeHotspot[];
+  usMarketPulse: UsMarketPulse;
+  marketBreadth: MarketBreadthProfile;
+}
+
 export interface CyclePivot {
   kind: "high" | "low";
   index: number;
@@ -144,6 +281,16 @@ export interface CycleSwing {
   endDate: string;
   tradingDays: number;
   returnPct: number;
+}
+
+export interface CycleWindow {
+  label: string;
+  direction: "up" | "down";
+  startDate: string;
+  endDate: string;
+  tradingDays: number;
+  returnPct: number;
+  status: "completed" | "ongoing";
 }
 
 export interface CycleOpportunity {
@@ -163,6 +310,21 @@ export interface CycleOpportunity {
   drawdownFromResistancePct: number;
 }
 
+export interface CycleRegime {
+  label: string;
+  actionLabel: string;
+  tone: IndicatorTone;
+  sinceDate: string;
+  rangeLow: number;
+  rangeHigh: number;
+  currentPositionPct: number;
+  amplitudeRatio: number;
+  liquidityRatio: number;
+  pathEfficiency: number;
+  recentSwingCount: number;
+  summary: string;
+}
+
 export interface CycleAnalysis {
   generatedAt: string;
   startDate: string;
@@ -180,7 +342,10 @@ export interface CycleAnalysis {
   amplitudeCv: number;
   latestState: string;
   chartPath: string;
+  regime: CycleRegime;
   opportunity: CycleOpportunity;
+  recentCycles: CycleWindow[];
+  currentCycle: CycleWindow;
   pivots: CyclePivot[];
   swings: CycleSwing[];
 }
@@ -202,6 +367,27 @@ export interface SelectionScore {
   factors: ScoreFactor[];
 }
 
+export interface CandlePoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  isLimitUpClose: boolean;
+}
+
+export interface LimitUpSignalProfile {
+  recentLimitUpCount10: number;
+  isHoldingAboveOpen: boolean;
+  anchorDate: string;
+  anchorOpen: number;
+  anchorClose: number;
+  holdDays: number;
+  currentBiasPct: number;
+  tone: IndicatorTone;
+  summary: string;
+}
+
 export interface WatchStock {
   symbol: string;
   name: string;
@@ -214,6 +400,10 @@ export interface WatchStock {
   note: string;
   thesis: string;
   sparkline: number[];
+  candles: CandlePoint[];
+  limitUpSignal: LimitUpSignalProfile;
+  bollinger: BollingerProfile;
+  chipDistribution: ChipDistributionProfile;
   signals: WatchSignal[];
   metadata: StockMetadata;
   companyInsight?: CompanyInsight;
@@ -222,6 +412,7 @@ export interface WatchStock {
   cycleAnalysis?: CycleAnalysis;
   priceDistribution: PriceDistributionProfile;
   amplitudeDistribution: AmplitudeDistributionProfile;
+  themeLinkage?: StockThemeLinkage;
 }
 
 export interface MarketSummary {
@@ -234,4 +425,5 @@ export interface MarketSummary {
 
 export interface DashboardSnapshot extends MarketSummary {
   stocks: WatchStock[];
+  marketRadar?: MarketRadar;
 }
